@@ -17,9 +17,10 @@ indicators, and DPoP.
 [FastestMCP](https://hexdocs.pm/gatekeep/fastest_mcp.html) ·
 [Security](https://hexdocs.pm/gatekeep/security.html)
 
-> #### Not yet released {: .warning}
+> #### Status: pre-release, APIs may change {: .warning}
 >
-> Gatekeep 0.1 is not on Hex yet. Until it is, depend on
+> Gatekeep is at `0.1.0-alpha.1`; its APIs may change before 0.1.0. It is
+> not on Hex yet. Until it is, depend on
 > `{:gatekeep, github: "figitaki/gatekeep"}`.
 
 ## Installation
@@ -29,10 +30,13 @@ Add `gatekeep` to your dependencies in `mix.exs`:
 ```elixir
 def deps do
   [
-    {:gatekeep, "~> 0.1"}
+    {:gatekeep, "~> 0.1.0-alpha.1"}
   ]
 end
 ```
+
+A requirement without a pre-release, such as `"~> 0.1"`, skips alphas; this
+one opts in, and also matches later 0.1 alphas and 0.1.x releases.
 
 Gatekeep requires Elixir 1.19 or later and Erlang/OTP 27 or later, and CI
 tests Elixir 1.19 with OTP 27 and Elixir 1.20 with OTP 28. The bundled

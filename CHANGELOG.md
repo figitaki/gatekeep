@@ -4,9 +4,9 @@ All notable changes to this project are documented in this file. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the
 project adheres to [Semantic Versioning](https://semver.org/).
 
-## [Unreleased]
+## [0.1.0-alpha.1] - Unreleased
 
-The first release, 0.1.0.
+The first pre-release. APIs may change before 0.1.0.
 
 ### Added
 
@@ -28,4 +28,4 @@ The first release, 0.1.0.
 - `:registered_client_prefix`, so registered client IDs from an earlier
   issuer keep working.
 
-[Unreleased]: https://github.com/figitaki/gatekeep/commits/main
+[0.1.0-alpha.1]: https://github.com/figitaki/gatekeep/commits/main
