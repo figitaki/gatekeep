@@ -12,9 +12,9 @@ defmodule Gatekeep.Plug.Resource do
   RFC 9728 §5.1, RFC 9449 §7.1), one per scheme the resource accepts:
 
     * no token: 401 with `resource_metadata` and `scope`, and no error code;
-    * a bad, expired, revoked, or other resource's token: 401
-      `invalid_token`;
-    * a bad DPoP proof: 401 `invalid_dpop_proof`;
+    * a bad, expired, revoked, or other resource's token, or a valid DPoP
+      proof from a key the token isn't bound to: 401 `invalid_token`;
+    * a DPoP proof that fails its checks: 401 `invalid_dpop_proof`;
     * a token without the scopes: 403 `insufficient_scope`, naming them.
 
   Options:
