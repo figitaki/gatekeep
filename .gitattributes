@@ -1,0 +1,2 @@
+# Vectors copied from RFCs: collapsed in diffs, left out of language stats.
+test/fixtures/vendor/** linguist-vendored linguist-generated

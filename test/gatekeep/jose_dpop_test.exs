@@ -5,21 +5,12 @@ defmodule Gatekeep.JOSEDPoPTest do
 
   alias Gatekeep.{DPoP, JOSE}
 
-  @vectors "test/support/fixtures/rfc9449_vectors.json" |> File.read!() |> JSON.decode!()
+  # RFC examples, vendored under test/fixtures/vendor.
+  defp vector(name), do: Path.join("test/fixtures/vendor", name) |> File.read!() |> JSON.decode!()
 
   describe "JOSE" do
     test "verifies the RFC 7515 A.3 ES256 example and rejects a changed payload or other alg" do
-      jwk = %{
-        "kty" => "EC",
-        "crv" => "P-256",
-        "x" => "f83OJ3D2xF1Bg8vub9tLe1gHMzV76e8Tus9uPHvRVEU",
-        "y" => "x_FEzRu9m36HLN_tue659LNpXW6pCyStikYjKIWI5a0"
-      }
-
-      jws =
-        "eyJhbGciOiJFUzI1NiJ9." <>
-          "eyJpc3MiOiJqb2UiLA0KICJleHAiOjEzMDA4MTkzODAsDQogImh0dHA6Ly9leGFtcGxlLmNvbS9pc19yb290Ijp0cnVlfQ." <>
-          "DtEhU3ljbEg8L38VWAfUAqOyKAM6-Xx-F4GawxaepmXFCgfTjDxw5djxLa8ISlSApmWQxfKTUJqPP3-Kg6NU1Q"
+      %{"jwk" => jwk, "jws" => jws} = vector("rfc7515_a3_es256.json")
 
       assert {:ok, decoded} = JOSE.decode(jws)
       assert JOSE.verify(decoded, jwk, ["ES256"])
@@ -41,18 +32,19 @@ defmodule Gatekeep.JOSEDPoPTest do
     end
 
     test "computes the RFC 7638 example thumbprint" do
-      jwk = %{
-        "kty" => "RSA",
-        "e" => "AQAB",
-        "n" =>
-          "0vx7agoebGcQSuuPiLJXZptN9nndrQmbXEps2aiAFbWhM78LhWx4cbbfAAtVT86zwu1RK7aPFFxuhDR1L6tSoc_BJECPebWKRXjBZCiFV4n3oknjhMstn64tZ_2W-5JsGY4Hc5n9yBXArwl93lqt7_RN5w6Cf0h4QyQ5v-65YGjQR0_FDW2QvzqY368QQMicAtaSqzs8KJZgnYb9c7d0zgdAZHzu6qMQvRL5hajrn1n91CbOpbISD08qNLyrdkt-bFTWhAI4vMQFh6WeZu0fM4lFd2NcRwr3XPksINHaQ-G_xBniIqbw0Ls1jF44-csFCur-kEgU8awapJzKnqDKgw"
-      }
-
-      assert JOSE.thumbprint(jwk) == {:ok, "NzbLsXh8uDCcd-6MNwXF4W_7noWXFZAfHkxZsRGC9Xs"}
+      %{"jwk" => jwk, "thumbprint" => thumbprint} = vector("rfc7638_thumbprint.json")
+      assert JOSE.thumbprint(jwk) == {:ok, thumbprint}
 
       # Any private member makes it a private key, not only d.
       assert JOSE.public_key?(jwk)
       for member <- ~w(d p q dp dq qi oth), do: refute(JOSE.public_key?(Map.put(jwk, member, "x")))
+    end
+
+    test "computes the RFC 7636 S256 code challenge" do
+      %{"code_verifier" => verifier, "code_challenge" => challenge} =
+        vector("rfc7636_appendix_b.json")
+
+      assert JOSE.digest(verifier) == challenge
     end
 
     test "never accepts none or HMAC, whatever the caller allows" do
@@ -74,7 +66,8 @@ defmodule Gatekeep.JOSEDPoPTest do
     @url "https://auth.test/oauth/token"
 
     test "accepts the RFC 9449 example proofs, with the RFC's thumbprint", %{config: config} do
-      %{"jkt" => jkt, "token_request" => t, "resource_request" => r} = @vectors
+      %{"jkt" => jkt, "token_request" => t, "resource_request" => r} =
+        vector("rfc9449_vectors.json")
 
       assert DPoP.verify([t["proof"]], %{method: t["method"], url: t["url"]}, config, now: t["now"]) ==
                {:ok, jkt}
