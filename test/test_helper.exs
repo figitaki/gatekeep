@@ -1,0 +1,8 @@
+{:ok, _} = Application.ensure_all_started(:postgrex)
+{:ok, _} = Application.ensure_all_started(:ecto_sql)
+Gatekeep.TestAuth.put_config()
+{:ok, _} = Gatekeep.TestRepo.start_link()
+{:ok, _} = Gatekeep.Cache.start_link(Gatekeep.TestAuth)
+Ecto.Adapters.SQL.Sandbox.mode(Gatekeep.TestRepo, :manual)
+Gatekeep.TestFetcher.setup()
+ExUnit.start()
