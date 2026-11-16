@@ -189,29 +189,3 @@ MyApp.Auth.revoke_grant(grant.id)
 
 Pass `owner:` to `Gatekeep.Authorization.approve/3` when the subject and the
 person managing the grant differ, such as agents acting for a user.
-
-## Machine clients
-
-Pre-register clients for the client credentials grant:
-
-```elixir
-clients: [
-  [
-    client_id: "nightly-report",
-    client_secret_sha256: "…", # Gatekeep.hash_client_secret(secret)
-    grant_types: ["client_credentials"],
-    scopes: ["notes:read"]
-  ]
-]
-```
-
-or give them `jwks:` for `private_key_jwt`, which the MCP client credentials
-extension recommends.
-
-## Enterprise-managed authorization
-
-Add `enterprise: [module: MyApp.EnterpriseTrust]`, implementing
-`Gatekeep.Enterprise`: which IdP issuers each tenant trusts, and how an IdP
-identity maps to a local user. See the
-[enterprise guide](enterprise_managed_authorization.md), which also
-lists what the specification leaves open.

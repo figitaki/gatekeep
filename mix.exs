@@ -78,7 +78,6 @@ defmodule Gatekeep.MixProject do
         "README.md": [title: "Overview"],
         "guides/getting_started.md": [title: "Getting started"],
         "guides/fastest_mcp.md": [title: "Protecting a FastestMCP server"],
-        "guides/enterprise_managed_authorization.md": [title: "Enterprise-managed authorization"],
         "guides/security.md": [title: "Security notes"],
         "CHANGELOG.md": [title: "Changelog"],
         LICENSE: [title: "License"]
@@ -91,13 +90,13 @@ defmodule Gatekeep.MixProject do
           Gatekeep.Authorization,
           Gatekeep.TokenEndpoint,
           Gatekeep.Registration,
-          Gatekeep.Metadata,
-          Gatekeep.Enterprise
+          Gatekeep.Metadata
         ],
         "Protected resources": [Gatekeep.Resource, Gatekeep.Token, Gatekeep.FastestMCP],
         Plugs: [Gatekeep.Plug.Endpoints, Gatekeep.Plug.Authorize, Gatekeep.Plug.Resource],
         "Extension points": [
           Gatekeep.Consent,
+          Gatekeep.Grant,
           Gatekeep.Storage,
           Gatekeep.Signer,
           Gatekeep.Signer.Local,

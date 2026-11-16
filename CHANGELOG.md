@@ -21,11 +21,11 @@ The first release, 0.1.0.
   per-resource audiences (RFC 8707), and `Gatekeep.Plug.Resource`.
 - DPoP (RFC 9449): proof verification, bound access and refresh tokens,
   `dpop_jkt` code binding, and `dpop_bound_access_tokens` enforcement.
-- The client credentials grant.
-- Enterprise-managed authorization: the identity assertion JWT authorization
-  grant (ID-JAG).
 - `Gatekeep.Storage` with an Ecto/PostgreSQL adapter and migrations,
   `Gatekeep.Signer` with `Gatekeep.Signer.Local` for JWT access tokens, and the
   `Gatekeep.FastestMCP` authenticator.
+- `Gatekeep.Grant`, the behaviour of extension grants.
+- `:registered_client_prefix`, so registered client IDs from an earlier
+  issuer keep working.
 
 [Unreleased]: https://github.com/figitaki/gatekeep/commits/main

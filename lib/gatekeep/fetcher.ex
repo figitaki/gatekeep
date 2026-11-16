@@ -1,7 +1,6 @@
 defmodule Gatekeep.Fetcher do
   @moduledoc """
-  Fetches client ID metadata documents, key sets, and enterprise issuers'
-  discovery documents.
+  Fetches client ID metadata documents and key sets.
 
   Every URL comes from another party, so the fetch is limited: HTTPS only, no
   redirects, no cookies or credentials, a 100 KB body limit, short timeouts,

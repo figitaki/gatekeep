@@ -11,11 +11,10 @@
 the authorization server to you; Gatekeep is that server. It covers what MCP
 clients such as Claude, ChatGPT, Claude Code, and the MCP Inspector use:
 PKCE, client ID metadata documents, dynamic client registration, resource
-indicators, DPoP, client credentials, and enterprise-managed authorization.
+indicators, and DPoP.
 
 [Getting started](https://hexdocs.pm/gatekeep/getting_started.html) ·
 [FastestMCP](https://hexdocs.pm/gatekeep/fastest_mcp.html) ·
-[Enterprise-managed authorization](https://hexdocs.pm/gatekeep/enterprise_managed_authorization.html) ·
 [Security](https://hexdocs.pm/gatekeep/security.html)
 
 > #### Not yet released {: .warning}
@@ -108,10 +107,8 @@ walks through each step, including the consent controller.
   `scope` and `insufficient_scope`.
 - DPoP (RFC 9449): proof checks, bound access and refresh tokens, `dpop_jkt`,
   and enforcement for clients that declare `dpop_bound_access_tokens`.
-- The client credentials grant, and enterprise-managed authorization
-  (identity assertion grants, ID-JAG).
-- Behaviours for storage (Ecto adapter included), consent, and signing, and
-  an authenticator for FastestMCP.
+- Behaviours for storage (Ecto adapter included), consent, signing, and
+  extension grants, and an authenticator for FastestMCP.
 
 Codes, refresh tokens, and access tokens are stored only as SHA-256 hashes;
 access tokens can also be RFC 9068 JWTs from your signer.
@@ -134,7 +131,6 @@ APIs, with MCP's choices built in rather than configured:
 | `iss` in authorization responses (RFC 9207) | Yes | No |
 | Refresh tokens | Rotation; reuse of any replaced token revokes the grant | Rotation |
 | DPoP | Proofs, bound access and refresh tokens, `dpop_jkt`, client-declared enforcement | 3.0 beta |
-| Enterprise-managed auth (ID-JAG) | Yes | No |
 | Consent and accounts | Your app's, through a behaviour | Generated Phoenix controllers and templates |
 | Dependencies | Plug, Ecto, NimbleOptions; JOSE and HTTP from OTP | `jose`, `joken`, Finch, Nebulex, Phoenix, and more |
 

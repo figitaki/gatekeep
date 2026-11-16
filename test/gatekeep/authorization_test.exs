@@ -26,7 +26,6 @@ defmodule Gatekeep.AuthorizationTest do
       assert as["authorization_response_iss_parameter_supported"]
       assert as["client_id_metadata_document_supported"]
       assert as["registration_endpoint"] == "https://auth.test/oauth/register"
-      refute Map.has_key?(as, "authorization_grant_profiles_supported")
     end
 
     @tag config: [

@@ -174,10 +174,8 @@ defmodule Gatekeep.Clients do
     grant_types =
       case metadata["grant_types"] do
         list when is_list(list) -> Enum.filter(list, &is_binary/1)
-        # No `grant_types`: the interactive grants, and the identity
-        # assertion grant, which the IdP vouches for per client (its
-        # `client_id` claim must name this client).
-        _ -> ["authorization_code", "refresh_token", "urn:ietf:params:oauth:grant-type:jwt-bearer"]
+        # No `grant_types`: the interactive grants.
+        _ -> ["authorization_code", "refresh_token"]
       end
 
     cond do

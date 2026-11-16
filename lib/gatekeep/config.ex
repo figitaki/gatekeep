@@ -77,42 +77,17 @@ defmodule Gatekeep.Config do
     grant_types: [
       type: {:list, :string},
       default: ["authorization_code", "refresh_token"],
-      doc:
-        ~s(Grants the client may use: `"authorization_code"`, `"refresh_token"`, ) <>
-          ~s(`"client_credentials"`, and `"urn:ietf:params:oauth:grant-type:jwt-bearer"`.)
+      doc: ~s(Grants the client may use, such as `"authorization_code"` and `"refresh_token"`.)
     ],
     scopes: [
       type: {:or, [{:list, :string}, nil]},
       default: nil,
       doc: "The only scopes the client may get, or nil for any."
     ],
-    subject: [
-      type: {:or, [:string, nil]},
-      default: nil,
-      doc: "The subject of its client credentials tokens. Defaults to the client ID."
-    ],
     dpop_bound_access_tokens: [
       type: :boolean,
       default: false,
       doc: "Refuse token requests from this client that carry no DPoP proof (RFC 9449 §5.2)."
-    ]
-  ]
-
-  @enterprise_schema [
-    module: [
-      type: :atom,
-      required: true,
-      doc: "A `Gatekeep.Enterprise` module that trusts issuers and resolves users."
-    ],
-    max_assertion_lifetime: [
-      type: :pos_integer,
-      default: 600,
-      doc: "The longest `exp - iat` an identity assertion may have, in seconds."
-    ],
-    require_resource_claim: [
-      type: :boolean,
-      default: false,
-      doc: "Refuse identity assertions without a `resource` claim."
     ]
   ]
 
@@ -149,7 +124,7 @@ defmodule Gatekeep.Config do
       type: {:list, {:keyword_list, @client_schema}},
       default: [],
       doc:
-        "Pre-registered clients, such as machine clients for the client credentials grant. " <>
+        "Pre-registered clients, such as confidential server-side clients. " <>
           "Each takes these options:\n\n" <> NimbleOptions.docs(@client_schema, nest_level: 1)
     ],
     registered_client_prefix: [
@@ -163,13 +138,6 @@ defmodule Gatekeep.Config do
       type: :atom,
       default: nil,
       doc: "The `Gatekeep.Consent` module `Gatekeep.Plug.Authorize` hands requests to."
-    ],
-    enterprise: [
-      type: {:or, [{:keyword_list, @enterprise_schema}, nil]},
-      default: nil,
-      doc:
-        "Turns on enterprise-managed authorization (identity assertion grants). Takes:\n\n" <>
-          NimbleOptions.docs(@enterprise_schema, nest_level: 1)
     ],
     signer: [
       type: {:or, [{:tuple, [:atom, :keyword_list]}, nil]},
