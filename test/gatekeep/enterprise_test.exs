@@ -199,6 +199,30 @@ defmodule Gatekeep.EnterpriseTest do
     assert Gatekeep.TestFetcher.count(idp <> "/.well-known/openid-configuration") == 1
   end
 
+  test "a cache full of clients doesn't make an issuer's keys refetch per request", ctx do
+    TestAuth.put_config(enterprise: [module: Trust], client_cache_size: 2)
+    for _ <- 1..3, do: Gatekeep.Clients.fetch(TestAuth.config(), TestClient.new().client_id)
+    discovery = @idp <> "/.well-known/openid-configuration"
+    before = Gatekeep.TestFetcher.count(discovery)
+
+    for _ <- 1..3 do
+      jag = id_jag(ctx.client, ctx.idp_key)
+      assert exchange_jag(ctx.client, jag).status == 200
+    end
+
+    assert Gatekeep.TestFetcher.count(discovery) - before == 1
+  end
+
+  test "an issuer whose cooldown can't be kept is not fetched", ctx do
+    TestAuth.put_config(enterprise: [module: Trust], client_cache_size: 1)
+    discovery = @idp <> "/.well-known/openid-configuration"
+    before = Gatekeep.TestFetcher.count(discovery)
+    Gatekeep.Cache.put(TestAuth, {:enterprise_jwks, "https://other.test"}, [], 600, 1)
+    jag = id_jag(ctx.client, ctx.idp_key)
+    assert error(exchange_jag(ctx.client, jag)) == {400, "invalid_grant"}
+    assert Gatekeep.TestFetcher.count(discovery) == before
+  end
+
   test "scopes: the claim's, narrowed by the request, never widened", ctx do
     jag = id_jag(ctx.client, ctx.idp_key, %{"scope" => "notes:read"})
 

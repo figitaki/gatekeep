@@ -272,15 +272,16 @@ defmodule Gatekeep.Enterprise do
           do: refetch_keys(config, iss, cached),
           else: cached_keys(cached)
 
+      # The cooldown entry is stored before fetching, and no fetch happens
+      # when it can't be: an issuer whose fetches can't be remembered must
+      # not be fetched on every request.
       :miss ->
-        case load_keys(config, iss) do
-          {:ok, keys} ->
-            cache_keys(config, iss, keys, config.client_cache_seconds)
-            {:ok, keys}
-
-          :error ->
-            cache_keys(config, iss, :unavailable, @refetch_interval)
-            {:error, :keys_unavailable}
+        with :ok <- cache_keys(config, iss, :unavailable, @refetch_interval),
+             {:ok, keys} <- load_keys(config, iss) do
+          cache_keys(config, iss, keys, config.client_cache_seconds)
+          {:ok, keys}
+        else
+          _ -> {:error, :keys_unavailable}
         end
     end
   end
@@ -298,8 +299,12 @@ defmodule Gatekeep.Enterprise do
     end
   end
 
-  defp cache_keys(config, iss, value, ttl),
-    do: Cache.put(config.name, {:enterprise_jwks, iss}, value, ttl, config.client_cache_size)
+  # Issuer keys have their own budget, so client metadata filling the cache
+  # can't stop them, and their cooldowns, from being kept.
+  defp cache_keys(config, iss, value, ttl) do
+    budget = {{:enterprise_jwks, :_}, config.client_cache_size}
+    Cache.put(config.name, {:enterprise_jwks, iss}, value, ttl, budget)
+  end
 
   defp load_keys(config, iss) do
     discovery = String.trim_trailing(iss, "/") <> "/.well-known/openid-configuration"
