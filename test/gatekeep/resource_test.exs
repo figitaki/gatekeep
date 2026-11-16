@@ -98,7 +98,8 @@ defmodule Gatekeep.ResourceTest do
       assert conn.status == 401
       assert challenge(conn) =~ ~s(error="invalid_token")
 
-      # Another key's proof.
+      # Another key's valid proof: the key binding is wrong, so the token
+      # is (RFC 9449 §7.1, Figure 16).
       thief = TestClient.ec_key(nil)
 
       conn =
@@ -110,7 +111,7 @@ defmodule Gatekeep.ResourceTest do
       assert conn.status == 401
 
       assert challenge(conn) =~
-               ~s(DPoP resource_metadata="https://mcp.test/.well-known/oauth-protected-resource/mcp", error="invalid_dpop_proof")
+               ~s(DPoP resource_metadata="https://mcp.test/.well-known/oauth-protected-resource/mcp", error="invalid_token")
 
       # A proof for another request, one without ath, and a replay.
       for proof <- [

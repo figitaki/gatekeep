@@ -28,4 +28,10 @@ The first pre-release. APIs may change before 0.1.0.
 - `:registered_client_prefix`, so registered client IDs from an earlier
   issuer keep working.
 
+### Fixed
+
+- A resource answers a valid DPoP proof from a key the token isn't bound to
+  with `invalid_token`, as RFC 9449 §7.1 (Figure 16) shows, and keeps
+  `invalid_dpop_proof` for proofs that fail their checks.
+
 [0.1.0-alpha.1]: https://github.com/figitaki/gatekeep/commits/main
