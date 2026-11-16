@@ -14,11 +14,11 @@ defmodule Gatekeep.MixProject do
       deps: deps(),
       aliases: aliases(),
       description:
-        "An OAuth 2.1 authorization server and protected-resource toolkit for MCP servers: " <>
-          "PKCE, client ID metadata documents, resource indicators, DPoP, and enterprise-managed authorization.",
+        "An OAuth 2.1 authorization server and protected-resource toolkit for MCP servers.",
       package: package(),
       docs: docs(),
       source_url: @source_url,
+      homepage_url: @source_url,
       dialyzer: [
         plt_add_apps: [:mix, :ex_unit],
         plt_local_path: "priv/plts",
@@ -61,7 +61,10 @@ defmodule Gatekeep.MixProject do
   defp package do
     [
       licenses: ["Apache-2.0"],
-      links: %{"GitHub" => @source_url},
+      links: %{
+        "GitHub" => @source_url,
+        "Changelog" => "https://hexdocs.pm/gatekeep/changelog.html"
+      },
       files: ~w(lib mix.exs README.md LICENSE CHANGELOG.md guides)
     ]
   end
@@ -69,14 +72,18 @@ defmodule Gatekeep.MixProject do
   defp docs do
     [
       main: "readme",
+      source_url: @source_url,
       source_ref: "v#{@version}",
       extras: [
-        "README.md",
-        "guides/fastest_mcp.md",
-        "guides/enterprise_managed_authorization.md",
-        "guides/security.md",
-        "CHANGELOG.md"
+        "README.md": [title: "Overview"],
+        "guides/getting_started.md": [title: "Getting started"],
+        "guides/fastest_mcp.md": [title: "Protecting a FastestMCP server"],
+        "guides/enterprise_managed_authorization.md": [title: "Enterprise-managed authorization"],
+        "guides/security.md": [title: "Security notes"],
+        "CHANGELOG.md": [title: "Changelog"],
+        LICENSE: [title: "License"]
       ],
+      groups_for_extras: [Guides: ~r{guides/}],
       groups_for_modules: [
         "Authorization server": [
           Gatekeep,
