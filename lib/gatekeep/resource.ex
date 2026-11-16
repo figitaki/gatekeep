@@ -47,11 +47,19 @@ defmodule Gatekeep.Resource do
       raise ArgumentError, "invalid Gatekeep config: resource #{inspect(opts[:id])} is not a URL"
     end
 
+    default_scopes = opts[:default_scopes] || names
+
+    if default_scopes -- names != [] do
+      raise ArgumentError,
+            "invalid Gatekeep config: resource #{inspect(opts[:id])} has default scopes " <>
+              "it does not offer: #{inspect(default_scopes -- names)}"
+    end
+
     %__MODULE__{
       id: opts[:id],
       scope_names: names,
       scope_descriptions: descriptions,
-      default_scopes: opts[:default_scopes] || names,
+      default_scopes: default_scopes,
       client_auth_methods: opts[:client_auth_methods],
       rotate_refresh_tokens: opts[:rotate_refresh_tokens],
       dpop: opts[:dpop],

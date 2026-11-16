@@ -55,7 +55,7 @@ defmodule Gatekeep.DPoP do
          :ok <- Util.expect(iat <= now + skew, :issued_in_future),
          :ok <- check_ath(jws.claims["ath"], request[:access_token]),
          {:ok, jkt} <- JOSE.thumbprint(jwk),
-         :ok <- remember(config, jkt, jti, iat + window + skew) do
+         :ok <- remember(config, jkt, jti, iat + window + skew + 1) do
       {:ok, jkt}
     else
       {:error, :malformed} -> {:error, :invalid_dpop_proof}
@@ -68,6 +68,8 @@ defmodule Gatekeep.DPoP do
   def verify(_proofs, _request, _config, _opts), do: {:error, :multiple_dpop_proofs}
 
   # The replay cache is scoped to the proof key: a jti is unique per key.
+  # The proof is accepted through the second iat + window + skew, so its
+  # entry is kept until the second after that.
   defp remember(config, jkt, jti, expires_at) do
     case Storage.call(config, :remember_jti, ["dpop", jkt, jti, DateTime.from_unix!(expires_at)]) do
       :ok -> :ok

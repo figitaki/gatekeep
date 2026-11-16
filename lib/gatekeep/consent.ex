@@ -19,7 +19,10 @@ defmodule Gatekeep.Consent do
         @impl true
         def handle_authorization(conn, request) do
           case conn.assigns[:current_user] do
-            nil -> Phoenix.Controller.redirect(conn, to: "/log-in?return_to=" <> conn.request_path <> "?" <> conn.query_string)
+            nil ->
+              return_to = conn.request_path <> "?" <> conn.query_string
+              Phoenix.Controller.redirect(conn, to: "/log-in?" <> URI.encode_query(return_to: return_to))
+
             user -> Phoenix.Controller.render(conn, MyAppWeb.ConsentHTML, :show, request: request, user: user)
           end
         end

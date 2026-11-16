@@ -18,7 +18,14 @@ defmodule Gatekeep.JOSE do
 
   @max_jwt_size 16_384
 
-  @doc "Splits and decodes a compact JWS. Does not check the signature."
+  # RFC 7518 §6.3.2: every member of an RSA private key.
+  @rsa_private ~w(d p q dp dq qi oth)
+
+  @doc """
+  Splits and decodes a compact JWS. Does not check the signature. A header
+  with `crit` is refused: Gatekeep implements no critical extensions
+  (RFC 7515 §4.1.11).
+  """
   @spec decode(term()) :: {:ok, decoded()} | {:error, :malformed}
   def decode(jwt) when is_binary(jwt) and byte_size(jwt) <= @max_jwt_size do
     with [h64, c64, s64] <- String.split(jwt, "."),
@@ -26,6 +33,7 @@ defmodule Gatekeep.JOSE do
          {:ok, claims_json} <- b64url_decode(c64),
          {:ok, signature} <- b64url_decode(s64),
          {:ok, %{} = header} <- JSON.decode(header_json),
+         false <- Map.has_key?(header, "crit"),
          {:ok, %{} = claims} <- JSON.decode(claims_json) do
       {:ok,
        %{header: header, claims: claims, signing_input: h64 <> "." <> c64, signature: signature}}
@@ -38,11 +46,12 @@ defmodule Gatekeep.JOSE do
 
   @doc """
   Verifies `decoded` with `jwk`, accepting only the algorithms in `allowed`.
-  The key type must match the algorithm.
+  The key type must match the algorithm, and the key's own `alg`, `use`, and
+  `key_ops` must allow verifying with it (RFC 7517 §4).
   """
   @spec verify(decoded(), map(), [String.t()]) :: boolean()
   def verify(%{header: %{"alg" => alg}} = decoded, jwk, allowed) when is_map(jwk) do
-    alg in allowed and verify_alg(alg, decoded, jwk)
+    alg in allowed and key_allows?(jwk, alg) and verify_alg(alg, decoded, jwk)
   end
 
   def verify(_decoded, _jwk, _allowed), do: false
@@ -84,6 +93,15 @@ defmodule Gatekeep.JOSE do
 
   defp verify_alg(_alg, _decoded, _jwk), do: false
 
+  defp key_allows?(jwk, alg) do
+    jwk["alg"] in [nil, alg] and jwk["use"] in [nil, "sig"] and
+      case jwk["key_ops"] do
+        nil -> true
+        ops when is_list(ops) -> "verify" in ops
+        _ -> false
+      end
+  end
+
   defp safe(fun) do
     fun.() == true
   rescue
@@ -92,13 +110,16 @@ defmodule Gatekeep.JOSE do
     _, _ -> false
   end
 
-  @doc "True when `jwk` is a public EC P-256 or RSA (2048 to 4096 bits) key with no private members."
+  @doc """
+  True when `jwk` is a public EC P-256 or RSA (2048 to 4096 bits) key with
+  no private members.
+  """
   @spec public_key?(term()) :: boolean()
   def public_key?(%{"kty" => "EC"} = jwk),
     do: not Map.has_key?(jwk, "d") and ec_point(jwk) != :error
 
   def public_key?(%{"kty" => "RSA"} = jwk),
-    do: not Map.has_key?(jwk, "d") and rsa_key(jwk) != :error
+    do: not Enum.any?(@rsa_private, &Map.has_key?(jwk, &1)) and rsa_key(jwk) != :error
 
   def public_key?(_), do: false
 

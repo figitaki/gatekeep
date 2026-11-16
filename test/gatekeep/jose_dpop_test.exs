@@ -1,6 +1,8 @@
 defmodule Gatekeep.JOSEDPoPTest do
   use Gatekeep.Case
 
+  import Ecto.Query, only: [from: 2]
+
   alias Gatekeep.{DPoP, JOSE}
 
   @vectors "test/support/fixtures/rfc9449_vectors.json" |> File.read!() |> JSON.decode!()
@@ -23,6 +25,19 @@ defmodule Gatekeep.JOSEDPoPTest do
       assert JOSE.verify(decoded, jwk, ["ES256"])
       refute JOSE.verify(decoded, jwk, ["RS256"])
       refute JOSE.verify(%{decoded | signing_input: decoded.signing_input <> "x"}, jwk, ["ES256"])
+
+      # The key's own alg, use, and key_ops restrict it.
+      assert JOSE.verify(decoded, Map.merge(jwk, %{"alg" => "ES256", "use" => "sig"}), ["ES256"])
+      assert JOSE.verify(decoded, Map.put(jwk, "key_ops", ["verify"]), ["ES256"])
+      refute JOSE.verify(decoded, Map.put(jwk, "alg", "ES384"), ["ES256"])
+      refute JOSE.verify(decoded, Map.put(jwk, "use", "enc"), ["ES256"])
+      refute JOSE.verify(decoded, Map.put(jwk, "key_ops", ["encrypt"]), ["ES256"])
+    end
+
+    test "refuses a header with critical extensions" do
+      key = TestClient.ec_key("k")
+      assert {:ok, _} = JOSE.decode(JOSE.sign(%{}, %{"a" => 1}, key))
+      assert JOSE.decode(JOSE.sign(%{"crit" => ["exp"]}, %{"a" => 1}, key)) == {:error, :malformed}
     end
 
     test "computes the RFC 7638 example thumbprint" do
@@ -34,6 +49,10 @@ defmodule Gatekeep.JOSEDPoPTest do
       }
 
       assert JOSE.thumbprint(jwk) == {:ok, "NzbLsXh8uDCcd-6MNwXF4W_7noWXFZAfHkxZsRGC9Xs"}
+
+      # Any private member makes it a private key, not only d.
+      assert JOSE.public_key?(jwk)
+      for member <- ~w(d p q dp dq qi oth), do: refute(JOSE.public_key?(Map.put(jwk, member, "x")))
     end
 
     test "never accepts none or HMAC, whatever the caller allows" do
@@ -108,7 +127,18 @@ defmodule Gatekeep.JOSEDPoPTest do
       request = %{method: "POST", url: @url}
       proof = &TestClient.dpop_proof(key, "POST", @url, iat: now + &1)
 
-      assert {:ok, _} = DPoP.verify([proof.(-90)], request, config, now: now)
+      oldest = proof.(-90)
+      assert {:ok, _} = DPoP.verify([oldest], request, config, now: now)
+
+      # Its replay entry outlives the last second it is accepted in.
+      [%{expires_at: expires_at}] =
+        Gatekeep.TestRepo.all(
+          from j in "gatekeep_seen_jtis",
+            where: j.kind == "dpop",
+            select: %{expires_at: j.expires_at}
+        )
+
+      assert expires_at |> DateTime.from_naive!("Etc/UTC") |> DateTime.to_unix() > now
       assert DPoP.verify([proof.(-91)], request, config, now: now) == {:error, :expired}
       assert {:ok, _} = DPoP.verify([proof.(30)], request, config, now: now)
       assert DPoP.verify([proof.(31)], request, config, now: now) == {:error, :issued_in_future}

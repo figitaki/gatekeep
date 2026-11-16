@@ -97,7 +97,11 @@ defmodule Gatekeep.Fetcher do
     http_opts = [timeout: @timeout, connect_timeout: 3_000, autoredirect: false, ssl: ssl]
     headers = [{~c"host", String.to_charlist(host_header)}, {~c"accept", ~c"application/json"}]
 
-    case :httpc.request(:get, {target, headers}, http_opts, sync: false, stream: :self) do
+    # :httpc streams only 200 and 206 responses; max_body_size bounds the
+    # others while they are read, so an error body can't be buffered whole.
+    opts = [sync: false, stream: :self, max_body_size: @max_body]
+
+    case :httpc.request(:get, {target, headers}, http_opts, opts) do
       {:ok, ref} -> receive_body(ref, [], 0)
       {:error, reason} -> {:error, reason}
     end
@@ -122,7 +126,10 @@ defmodule Gatekeep.Fetcher do
         {:ok, %{status: 200, body: IO.iodata_to_binary(acc)}}
 
       {:http, {^ref, {{_version, status, _reason}, _headers, body}}} ->
-        {:ok, %{status: status, body: if(byte_size(body) > @max_body, do: "", else: body)}}
+        {:ok, %{status: status, body: body}}
+
+      {:http, {^ref, {:error, :body_too_big}}} ->
+        {:error, :too_large}
 
       {:http, {^ref, {:error, reason}}} ->
         {:error, reason}

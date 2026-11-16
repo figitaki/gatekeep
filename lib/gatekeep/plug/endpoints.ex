@@ -41,7 +41,7 @@ defmodule Gatekeep.Plug.Endpoints do
   end
 
   defp route(conn, config, method, path) do
-    paths = config.paths
+    paths = endpoint_paths(config)
 
     cond do
       method == "OPTIONS" and handled?(config, path) ->
@@ -76,8 +76,15 @@ defmodule Gatekeep.Plug.Endpoints do
     do: json(conn, 200, Metadata.protected_resource(config, resource), :public)
 
   defp handled?(config, path) do
-    path in Keyword.values(config.paths) or path in as_metadata_paths(config) or
+    path in Keyword.values(endpoint_paths(config)) or path in as_metadata_paths(config) or
       not is_nil(resource_at(config, path))
+  end
+
+  # The paths the endpoints are advertised at: `Config.endpoint/2` puts them
+  # under the issuer, so an issuer with a path serves them under that path.
+  defp endpoint_paths(config) do
+    prefix = String.trim_trailing(URI.parse(config.issuer).path || "", "/")
+    Enum.map(config.paths, fn {name, path} -> {name, prefix <> path} end)
   end
 
   # RFC 8414 §3.1: the well-known prefix, with the issuer's path appended.
@@ -114,14 +121,28 @@ defmodule Gatekeep.Plug.Endpoints do
   end
 
   defp register(conn, config) do
-    {:ok, body, conn} = read_body(conn, length: 64_000)
+    case Config.public_clients?(config) && read_body(conn, length: 64_000) do
+      false ->
+        conn
 
-    params =
-      case JSON.decode(body) do
-        {:ok, params} -> params
-        _ -> nil
-      end
+      {:ok, body, conn} ->
+        params =
+          case JSON.decode(body) do
+            {:ok, params} -> params
+            _ -> nil
+          end
 
+        register(conn, config, params)
+
+      {:more, _partial, conn} ->
+        json(conn, 413, %{error: "invalid_client_metadata", error_description: "body too large"})
+
+      {:error, _reason} ->
+        oauth_error(conn, 400, :invalid_request)
+    end
+  end
+
+  defp register(conn, config, params) do
     case Registration.register(config, params) do
       {:ok, body} ->
         json(conn, 201, body)

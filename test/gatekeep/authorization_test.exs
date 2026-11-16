@@ -292,6 +292,34 @@ defmodule Gatekeep.AuthorizationTest do
     end
   end
 
+  describe "endpoint routing and configuration" do
+    @tag config: [issuer: "https://auth.test/tenant"]
+    test "an issuer with a path serves its endpoints under that path" do
+      as = json_body(get_path("/.well-known/oauth-authorization-server/tenant"))
+      assert as["token_endpoint"] == "https://auth.test/tenant/oauth/token"
+
+      conn = post_form("/tenant/oauth/token", %{"grant_type" => "authorization_code"})
+      assert {conn.status, json_body(conn)["error"]} == {401, "invalid_client"}
+      assert post_form("/oauth/token", %{"grant_type" => "authorization_code"}).status == 404
+    end
+
+    test "an oversized registration body is refused, not a crash" do
+      conn = post_json("/oauth/register", %{"client_name" => String.duplicate("x", 70_000)})
+      assert {conn.status, json_body(conn)["error"]} == {413, "invalid_client_metadata"}
+    end
+
+    test "default scopes must be scopes the resource offers" do
+      assert_raise ArgumentError, ~r/default scopes it does not offer/, fn ->
+        Gatekeep.Config.new!(
+          TestAuth.base_config(
+            name: TestAuth,
+            resources: [[id: TestAuth.mcp(), scopes: ["notes:read"], default_scopes: ["admin"]]]
+          )
+        )
+      end
+    end
+  end
+
   def post_json(path, body) do
     Plug.Test.conn(:post, path, JSON.encode!(body))
     |> Plug.Conn.put_req_header("content-type", "application/json")

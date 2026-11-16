@@ -58,7 +58,17 @@ defmodule Gatekeep.ClientAuth do
   end
 
   # RFC 6749 §2.3.1: both parts are form-urlencoded before base64.
-  defp basic_credentials("Basic " <> encoded) do
+  # HTTP authentication schemes are case-insensitive (RFC 9110 §11.1).
+  defp basic_credentials(header) when is_binary(header) do
+    case String.split(header, " ", parts: 2) do
+      [scheme, encoded] -> if String.downcase(scheme) == "basic", do: decode_basic(encoded)
+      _ -> nil
+    end
+  end
+
+  defp basic_credentials(_), do: nil
+
+  defp decode_basic(encoded) do
     with {:ok, decoded} <- Base.decode64(String.trim(encoded)),
          [id, secret] <- String.split(decoded, ":", parts: 2) do
       {URI.decode_www_form(id), URI.decode_www_form(secret)}
@@ -68,8 +78,6 @@ defmodule Gatekeep.ClientAuth do
   rescue
     _ -> :malformed
   end
-
-  defp basic_credentials(_), do: nil
 
   defp check_secret(config, client_id, secret) when is_binary(client_id) and is_binary(secret) do
     with {:ok, %Client{secret_hash: hash} = client} when is_binary(hash) <-
@@ -107,6 +115,7 @@ defmodule Gatekeep.ClientAuth do
          :ok <- verify_signature(config, jws, client),
          :ok <- Util.expect(exp > now - skew, :expired),
          :ok <- Util.expect(iat <= now + skew, :issued_in_future),
+         :ok <- check_nbf(jws.claims["nbf"], now, skew),
          :ok <- Util.expect(exp - iat <= @max_assertion_lifetime, :assertion_too_long),
          :ok <- Util.expect(jti != "" and byte_size(jti) <= 255, :bad_jti),
          :ok <-
@@ -122,6 +131,14 @@ defmodule Gatekeep.ClientAuth do
       _ -> {:error, :invalid_assertion}
     end
   end
+
+  # RFC 7519 §4.1.5: nbf is optional, but honored when present.
+  defp check_nbf(nil, _now, _skew), do: :ok
+
+  defp check_nbf(nbf, now, skew) when is_integer(nbf),
+    do: Util.expect(nbf <= now + skew, :not_yet_valid)
+
+  defp check_nbf(_nbf, _now, _skew), do: {:error, :invalid_assertion}
 
   defp audience?(config, aud, iss) when is_binary(aud) do
     aud == config.issuer or

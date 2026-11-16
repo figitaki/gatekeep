@@ -229,25 +229,70 @@ defmodule Gatekeep.Enterprise do
   defp issuer_keys(_config, _iss, %{jwks: keys}, _kid) when is_list(keys),
     do: {:ok, Enum.filter(keys, &JOSE.public_key?/1)}
 
+  # Cached as a key list, or :unavailable for @refetch_interval after a failed
+  # first fetch. Concurrent requests share one fetch, and the refetch cooldown
+  # is checked again under the lock.
   defp issuer_keys(config, iss, _trust, kid) do
     key = {:enterprise_jwks, iss}
 
     case Cache.lookup(config.name, key) do
-      {:ok, keys, fetched_at} ->
-        if is_binary(kid) and not Enum.any?(keys, &(&1["kid"] == kid)) and
-             Util.now() - fetched_at >= @refetch_interval,
-           do: Cache.single_flight(config.name, key, fn -> load_keys(config, iss) end),
-           else: {:ok, keys}
+      {:ok, cached, fetched_at} ->
+        if stale?(cached, kid, fetched_at),
+          do: Cache.single_flight(config.name, key, fn -> reload_keys(config, iss, kid) end),
+          else: cached_keys(cached)
 
       :miss ->
-        Cache.single_flight(config.name, key, fn ->
-          case Cache.lookup(config.name, key) do
-            {:ok, keys, _} -> {:ok, keys}
-            :miss -> load_keys(config, iss)
-          end
-        end)
+        Cache.single_flight(config.name, key, fn -> reload_keys(config, iss, kid) end)
     end
   end
+
+  defp stale?(keys, kid, fetched_at) when is_list(keys) do
+    is_binary(kid) and not Enum.any?(keys, &(&1["kid"] == kid)) and
+      Util.now() - fetched_at >= @refetch_interval
+  end
+
+  defp stale?(:unavailable, _kid, _fetched_at), do: false
+
+  defp cached_keys(:unavailable), do: {:error, :keys_unavailable}
+  defp cached_keys(keys), do: {:ok, keys}
+
+  defp reload_keys(config, iss, kid) do
+    key = {:enterprise_jwks, iss}
+
+    case Cache.lookup(config.name, key) do
+      {:ok, cached, fetched_at} ->
+        if stale?(cached, kid, fetched_at),
+          do: refetch_keys(config, iss, cached),
+          else: cached_keys(cached)
+
+      :miss ->
+        case load_keys(config, iss) do
+          {:ok, keys} ->
+            cache_keys(config, iss, keys, config.client_cache_seconds)
+            {:ok, keys}
+
+          :error ->
+            cache_keys(config, iss, :unavailable, @refetch_interval)
+            {:error, :keys_unavailable}
+        end
+    end
+  end
+
+  # A failed refetch keeps the unexpired keys and restarts the cooldown.
+  defp refetch_keys(config, iss, cached) do
+    case load_keys(config, iss) do
+      {:ok, keys} ->
+        cache_keys(config, iss, keys, config.client_cache_seconds)
+        {:ok, keys}
+
+      :error ->
+        Cache.update(config.name, {:enterprise_jwks, iss}, cached, Util.now())
+        {:ok, cached}
+    end
+  end
+
+  defp cache_keys(config, iss, value, ttl),
+    do: Cache.put(config.name, {:enterprise_jwks, iss}, value, ttl, config.client_cache_size)
 
   defp load_keys(config, iss) do
     discovery = String.trim_trailing(iss, "/") <> "/.well-known/openid-configuration"
@@ -255,17 +300,9 @@ defmodule Gatekeep.Enterprise do
     with {:ok, %{"issuer" => ^iss, "jwks_uri" => jwks_uri}} when is_binary(jwks_uri) <-
            Fetcher.fetch_json(discovery, config),
          {:ok, keys} <- Gatekeep.Clients.fetch_keys(config, jwks_uri) do
-      Cache.put(
-        config.name,
-        {:enterprise_jwks, iss},
-        keys,
-        config.client_cache_seconds,
-        config.client_cache_size
-      )
-
       {:ok, keys}
     else
-      _ -> {:error, :keys_unavailable}
+      _ -> :error
     end
   end
 
@@ -314,8 +351,10 @@ defmodule Gatekeep.Enterprise do
     end
   end
 
+  # An omitted :scopes keeps what the assertion grants; an empty list is an
+  # explicit "nothing" and refuses the token.
   defp narrow(scopes, nil), do: {:ok, scopes}
-  defp narrow(scopes, []), do: {:ok, scopes}
+  defp narrow(_scopes, []), do: {:error, :access_denied}
 
   defp narrow(scopes, requested) when is_list(requested) do
     if requested -- scopes == [],

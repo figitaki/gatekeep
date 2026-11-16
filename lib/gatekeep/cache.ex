@@ -48,15 +48,27 @@ defmodule Gatekeep.Cache do
     end
   end
 
-  @doc "Stores `value` for `ttl` seconds, unless the table is full."
+  @doc """
+  Stores `value` for `ttl` seconds, unless the table is full. Entries are
+  written by the cache process, so concurrent stores of different keys can't
+  together exceed `max_size`. Stores follow fetches, so they are rare.
+  """
   def put(name, key, value, ttl, max_size, fetched_at \\ Gatekeep.Util.now()) do
+    GenServer.call(
+      table(name),
+      {:admit, {key, value, Gatekeep.Util.now() + ttl, fetched_at}, max_size}
+    )
+  end
+
+  @impl true
+  def handle_call({:admit, {key, _, _, _} = entry, max_size}, _from, name) do
     table = table(name)
 
     if :ets.member(table, key) or :ets.info(table, :size) < max_size do
-      :ets.insert(table, {key, value, Gatekeep.Util.now() + ttl, fetched_at})
+      :ets.insert(table, entry)
     end
 
-    :ok
+    {:reply, :ok, name}
   end
 
   @doc "Replaces the value of an existing entry, keeping its expiry."

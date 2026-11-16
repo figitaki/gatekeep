@@ -10,6 +10,7 @@ defmodule Gatekeep.EnterpriseTest do
 
     @impl true
     def trusted_issuer("https://idp.test", _claims, _client), do: {:ok, %{tenant: "acme"}}
+    def trusted_issuer("https://down-idp.test", _claims, _client), do: {:ok, %{tenant: "down"}}
 
     def trusted_issuer("https://static-idp.test", _claims, _client),
       do: {:ok, %{tenant: "static", jwks: :persistent_term.get({__MODULE__, :jwks})}}
@@ -18,6 +19,7 @@ defmodule Gatekeep.EnterpriseTest do
 
     @impl true
     def resolve_subject(%{"sub" => "denied"}, _issuer), do: {:error, :access_denied}
+    def resolve_subject(%{"sub" => "no-scopes"}, _issuer), do: {:ok, subject: "x", scopes: []}
 
     def resolve_subject(%{"iss" => iss, "sub" => sub} = claims, issuer),
       do:
@@ -179,6 +181,22 @@ defmodule Gatekeep.EnterpriseTest do
   test "a user the app doesn't know is access_denied", ctx do
     assert error(exchange_jag(ctx.client, id_jag(ctx.client, ctx.idp_key, %{"sub" => "denied"}))) ==
              {400, "access_denied"}
+  end
+
+  test "an app narrowing to no scopes refuses the token instead of granting all", ctx do
+    jag = id_jag(ctx.client, ctx.idp_key, %{"sub" => "no-scopes"})
+    assert error(exchange_jag(ctx.client, jag)) == {400, "access_denied"}
+  end
+
+  test "an unreachable issuer's key set is fetched once per cooldown, not per request", ctx do
+    idp = "https://down-idp.test"
+
+    for _ <- 1..3 do
+      jag = id_jag(ctx.client, ctx.idp_key, %{"iss" => idp})
+      assert error(exchange_jag(ctx.client, jag)) == {400, "invalid_grant"}
+    end
+
+    assert Gatekeep.TestFetcher.count(idp <> "/.well-known/openid-configuration") == 1
   end
 
   test "scopes: the claim's, narrowed by the request, never widened", ctx do

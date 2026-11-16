@@ -247,6 +247,8 @@ defmodule Gatekeep.TokenEndpointTest do
       assert check.(iat: now - 400, exp: now - 31) == {:error, :expired}
       assert check.(iat: now, exp: now + 301) == {:error, :assertion_too_long}
       assert check.(iat: now + 60, exp: now + 120) == {:error, :issued_in_future}
+      assert check.(nbf: now + 60) == {:error, :not_yet_valid}
+      assert {:ok, _} = check.(nbf: now + 30)
 
       params = TestClient.client_auth(client)
       assert {:ok, _} = Gatekeep.ClientAuth.verify_client_assertion(config, params)
@@ -302,6 +304,29 @@ defmodule Gatekeep.TokenEndpointTest do
         })
 
       assert error(conn) == {401, "invalid_client"}
+    end
+
+    @tag config: [
+           clients: [
+             [
+               client_id: "web",
+               client_secret_sha256: Gatekeep.hash_client_secret("s3cret"),
+               redirect_uris: ["https://web.example/cb"]
+             ]
+           ]
+         ]
+    test "the Basic scheme is case-insensitive" do
+      config = TestAuth.config()
+
+      for scheme <- ["Basic", "basic", "BASIC"] do
+        header = scheme <> " " <> Base.encode64("web:s3cret")
+
+        assert {:ok, %{client_id: "web"}, "client_secret_basic"} =
+                 Gatekeep.ClientAuth.authenticate(config, %{}, header)
+      end
+
+      assert Gatekeep.ClientAuth.authenticate(config, %{}, "basic " <> Base.encode64("web:no")) ==
+               {:error, :bad_secret}
     end
 
     test "concurrent requests for one client share one metadata fetch" do

@@ -198,7 +198,8 @@ defmodule Gatekeep.TestClient do
         "iat" => iat,
         "exp" => Keyword.get(opts, :exp, iat + 120),
         "jti" => Keyword.get(opts, :jti, random_id())
-      },
+      }
+      |> then(&if(nbf = opts[:nbf], do: Map.put(&1, "nbf", nbf), else: &1)),
       signer
     )
   end
