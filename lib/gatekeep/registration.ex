@@ -4,7 +4,8 @@ defmodule Gatekeep.Registration do
   client ID metadata document, such as the MCP Inspector.
 
   Registered clients are public: no secret, PKCE on every authorization.
-  Their `client_id` starts with `gkc_`, and the name they give is never shown
+  Their `client_id` starts with `:registered_client_prefix` (`gkc_` by
+  default), and the name they give is never shown
   as verified. Errors in their authorization requests are shown on the
   issuer's own page rather than redirected, since anyone can register any
   redirect URI.
@@ -55,7 +56,11 @@ defmodule Gatekeep.Registration do
 
       true ->
         now = Util.now_dt()
-        client_id = "gkc_" <> (:crypto.strong_rand_bytes(18) |> Base.url_encode64(padding: false))
+
+        client_id =
+          config.registered_client_prefix <>
+            (:crypto.strong_rand_bytes(18) |> Base.url_encode64(padding: false))
+
         name = client_name(params["client_name"])
 
         :ok =

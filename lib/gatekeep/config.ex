@@ -152,6 +152,13 @@ defmodule Gatekeep.Config do
         "Pre-registered clients, such as machine clients for the client credentials grant. " <>
           "Each takes these options:\n\n" <> NimbleOptions.docs(@client_schema, nest_level: 1)
     ],
+    registered_client_prefix: [
+      type: {:custom, __MODULE__, :validate_client_prefix, []},
+      default: "gkc_",
+      doc:
+        "The prefix of client IDs issued by dynamic client registration: letters and digits " <>
+          "ending in `_`, such as `\"gkc_\"`. Set it to keep the IDs an earlier issuer handed out."
+    ],
     consent: [
       type: :atom,
       default: nil,
@@ -264,6 +271,13 @@ defmodule Gatekeep.Config do
     register: "/oauth/register",
     jwks: "/oauth/jwks"
   ]
+
+  @doc false
+  def validate_client_prefix(prefix) do
+    if is_binary(prefix) and prefix =~ ~r/\A[A-Za-z0-9]+_\z/,
+      do: {:ok, prefix},
+      else: {:error, "expected letters and digits ending in \"_\", got: #{inspect(prefix)}"}
+  end
 
   @doc "Validates `opts` and builds the config. Raises `ArgumentError` on invalid options."
   @spec new!(keyword()) :: t()

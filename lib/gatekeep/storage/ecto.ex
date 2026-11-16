@@ -18,6 +18,24 @@ defmodule Gatekeep.Storage.Ecto do
   It relies on PostgreSQL's row locks: `UPDATE ... RETURNING` for
   consuming codes and `SELECT ... FOR UPDATE` for refresh tokens.
 
+  ## Importing existing grants
+
+  The tables are `gatekeep_grants`, `gatekeep_codes`,
+  `gatekeep_access_tokens`, `gatekeep_consumed_refresh_tokens`,
+  `gatekeep_clients`, and `gatekeep_seen_jtis`; see
+  `Gatekeep.Storage.Ecto.Migration` for their columns. To move grants from
+  another issuer without signing everyone out, copy its rows into them:
+
+    * tokens are stored as raw SHA-256 digests (`:crypto.hash(:sha256,
+      token)`), and their text is never parsed, so any opaque token works;
+    * a grant's `expires_at` is when its refresh token stops working;
+    * keep grant IDs when copying, then advance the `gatekeep_grants` ID
+      sequence past the largest;
+    * set `:registered_client_prefix` to the prefix of the copied
+      registered client IDs.
+
+  Codes and replay entries live for minutes and need not be copied.
+
   ## Options
 
     * `:repo` - the Ecto repo (required).

@@ -293,6 +293,21 @@ defmodule Gatekeep.AuthorizationTest do
   end
 
   describe "endpoint routing and configuration" do
+    @tag config: [registered_client_prefix: "rvc_"]
+    test "registered client IDs use the configured prefix, and only it resolves" do
+      conn = post_json("/oauth/register", %{"redirect_uris" => ["http://127.0.0.1/cb"]})
+      assert "rvc_" <> _ = client_id = json_body(conn)["client_id"]
+      config = TestAuth.config()
+      assert {:ok, %{kind: :registered}} = Gatekeep.Clients.fetch(config, client_id)
+      assert {:error, _} = Gatekeep.Clients.fetch(config, "gkc_" <> binary_part(client_id, 4, 24))
+
+      for bad <- ["", "rvc", "https://", "a-b_"] do
+        assert_raise ArgumentError, fn ->
+          Gatekeep.Config.new!(TestAuth.base_config(name: TestAuth, registered_client_prefix: bad))
+        end
+      end
+    end
+
     @tag config: [issuer: "https://auth.test/tenant"]
     test "an issuer with a path serves its endpoints under that path" do
       as = json_body(get_path("/.well-known/oauth-authorization-server/tenant"))

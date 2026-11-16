@@ -3,7 +3,8 @@ defmodule Gatekeep.Clients do
   Resolves a `client_id` to a `Gatekeep.Client`:
 
     * a client listed under `:clients` in config;
-    * a `gkc_` ID, registered through dynamic client registration and kept by
+    * an ID with the `:registered_client_prefix` (`gkc_` by default),
+      registered through dynamic client registration and kept by
       the storage;
     * an HTTPS URL naming a client ID metadata document, which is fetched,
       checked, and cached with the key set at its `jwks_uri`.
@@ -31,7 +32,7 @@ defmodule Gatekeep.Clients do
       static = Enum.find(config.clients, &(&1.client_id == client_id)) ->
         {:ok, static}
 
-      String.starts_with?(client_id, "gkc_") ->
+      String.starts_with?(client_id, config.registered_client_prefix) ->
         registered(config, client_id)
 
       valid_client_id?(client_id) ->
