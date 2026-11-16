@@ -23,6 +23,7 @@ the specific reason stays internal.
 | Expired codes | 120-second lifetime | "an expired code" |
 | Refresh token theft | Rotation; reuse of any replaced token revokes the grant; another client presenting it changes nothing | "refresh tokens" |
 | Audience confusion | Token requests may only repeat the grant's resource | "naming another resource", "can't be moved" |
+| Machine client impersonation | Client credentials only for pre-registered clients that list the grant and hold a secret or key; public clients refused | "client credentials" |
 | Forged client assertions | Keys only from the client's key set; `aud` the issuer; 5-minute lifetime; `jti` once | "client authentication" |
 | Stale keys | Cache expires; unknown `kid` refetches at most every 30 s | "a key removed from jwks_uri" |
 | SSRF via metadata URLs | HTTPS only, no redirects, private addresses refused, connection pinned to the checked address, 100 KB limit | `Gatekeep.Fetcher` |

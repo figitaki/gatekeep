@@ -77,12 +77,19 @@ defmodule Gatekeep.Config do
     grant_types: [
       type: {:list, :string},
       default: ["authorization_code", "refresh_token"],
-      doc: ~s(Grants the client may use, such as `"authorization_code"` and `"refresh_token"`.)
+      doc:
+        ~s(Grants the client may use: `"authorization_code"`, `"refresh_token"`, and ) <>
+          ~s(`"client_credentials"`.)
     ],
     scopes: [
       type: {:or, [{:list, :string}, nil]},
       default: nil,
       doc: "The only scopes the client may get, or nil for any."
+    ],
+    subject: [
+      type: {:or, [:string, nil]},
+      default: nil,
+      doc: "The subject of its client credentials tokens. Defaults to the client ID."
     ],
     dpop_bound_access_tokens: [
       type: :boolean,
@@ -124,7 +131,7 @@ defmodule Gatekeep.Config do
       type: {:list, {:keyword_list, @client_schema}},
       default: [],
       doc:
-        "Pre-registered clients, such as confidential server-side clients. " <>
+        "Pre-registered clients, such as machine clients for the client credentials grant. " <>
           "Each takes these options:\n\n" <> NimbleOptions.docs(@client_schema, nest_level: 1)
     ],
     registered_client_prefix: [
