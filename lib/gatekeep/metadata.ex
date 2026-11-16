@@ -4,9 +4,7 @@ defmodule Gatekeep.Metadata do
   protected resource metadata (RFC 9728).
   """
 
-  alias Gatekeep.{Config, Resource}
-
-  @jwt_bearer "urn:ietf:params:oauth:grant-type:jwt-bearer"
+  alias Gatekeep.{Config, Resource, TokenEndpoint}
 
   @doc "Authorization server metadata (RFC 8414 §2) for the issuer and its enabled resources."
   @spec authorization_server(Config.t()) :: map()
@@ -15,13 +13,8 @@ defmodule Gatekeep.Metadata do
     methods = resources |> Enum.flat_map(& &1.client_auth_methods) |> Enum.uniq()
     public? = "none" in methods
     jwt_methods = Enum.filter(methods, &(&1 == "private_key_jwt")) != []
-    enterprise? = not is_nil(config.enterprise)
-    client_credentials? = Enum.any?(config.clients, &("client_credentials" in &1.grant_types))
-
-    grant_types =
-      ["authorization_code", "refresh_token"] ++
-        if(client_credentials?, do: ["client_credentials"], else: []) ++
-        if(enterprise?, do: [@jwt_bearer], else: [])
+    grants = TokenEndpoint.grants(config)
+    grant_types = ["authorization_code", "refresh_token"] ++ Enum.map(grants, & &1.grant_type())
 
     %{
       "issuer" => config.issuer,
@@ -43,11 +36,16 @@ defmodule Gatekeep.Metadata do
       "dpop_signing_alg_values_supported" => config.dpop_signing_algs,
       "authorization_response_iss_parameter_supported" => true,
       "client_id_metadata_document_supported" => true,
-      "authorization_grant_profiles_supported" =>
-        if(enterprise?, do: ["urn:ietf:params:oauth:grant-profile:id-jag"]),
       "scopes_supported" => resources |> Enum.flat_map(& &1.scope_names) |> Enum.uniq()
     }
     |> Map.reject(fn {_key, value} -> is_nil(value) end)
+    |> then(
+      &Enum.reduce(grants, &1, fn grant, acc -> Map.merge(acc, grant_metadata(grant, config)) end)
+    )
+  end
+
+  defp grant_metadata(grant, config) do
+    if function_exported?(grant, :metadata, 1), do: grant.metadata(config), else: %{}
   end
 
   @doc "Protected resource metadata (RFC 9728 §2) of `resource`."

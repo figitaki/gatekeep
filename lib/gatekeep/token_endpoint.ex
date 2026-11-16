@@ -12,11 +12,9 @@ defmodule Gatekeep.TokenEndpoint do
       `rotate_refresh_tokens` (the default) issue a new refresh token each
       time; presenting any replaced one revokes the grant and every token
       issued under it.
-    * `client_credentials`, for pre-registered clients that list it in
-      `:grant_types`. The token acts as the client itself.
-    * `urn:ietf:params:oauth:grant-type:jwt-bearer` with an identity
-      assertion (ID-JAG), for enterprise-managed authorization; see
-      `Gatekeep.Enterprise`.
+    * Extension grants, each a `Gatekeep.Grant`: `client_credentials`
+      (`Gatekeep.ClientCredentials`) and the identity assertion grant of
+      enterprise-managed authorization (`Gatekeep.Enterprise`).
 
   ## DPoP
 
@@ -30,10 +28,10 @@ defmodule Gatekeep.TokenEndpoint do
   gets Bearer tokens.
   """
 
-  alias Gatekeep.{Client, ClientAuth, Config, DPoP, Enterprise, Resource, Storage, Util}
+  alias Gatekeep.{Client, ClientAuth, Config, DPoP, Resource, Storage, Util}
 
-  @jwt_bearer "urn:ietf:params:oauth:grant-type:jwt-bearer"
-  @grant_types ["authorization_code", "refresh_token", "client_credentials", @jwt_bearer]
+  # Grants beyond authorization_code and refresh_token, each a Gatekeep.Grant.
+  @extension_grants [Gatekeep.ClientCredentials, Gatekeep.Enterprise]
 
   @typedoc """
   The HTTP request around the form parameters: its `Authorization` header and
@@ -61,14 +59,26 @@ defmodule Gatekeep.TokenEndpoint do
     grant_type = params["grant_type"]
 
     with {:ok, client, method} <- authenticate(config, params, http),
-         :ok <- check_grant_type(config, client, grant_type),
+         {:ok, handle} <- handler(config, grant_type),
+         :ok <- Util.expect(Client.grant_allowed?(client, grant_type), :unauthorized_client),
          {:ok, jkt} <- dpop_key(config, client, http) do
-      case grant_type do
-        "authorization_code" -> exchange_code(config, client, method, params, jkt)
-        "refresh_token" -> refresh(config, client, method, params, jkt)
-        "client_credentials" -> client_credentials(config, client, method, params, jkt)
-        @jwt_bearer -> Enterprise.exchange(config, client, method, params, jkt)
-      end
+      handle.(config, client, method, params, jkt)
+    end
+  end
+
+  @doc """
+  The extension grants (`Gatekeep.Grant` modules) that `config` turns on.
+  """
+  @spec grants(Config.t()) :: [module()]
+  def grants(%Config{} = config), do: Enum.filter(@extension_grants, & &1.enabled?(config))
+
+  defp handler(_config, "authorization_code"), do: {:ok, &exchange_code/5}
+  defp handler(_config, "refresh_token"), do: {:ok, &refresh/5}
+
+  defp handler(config, grant_type) do
+    case Enum.find(grants(config), &(&1.grant_type() == grant_type)) do
+      nil -> {:error, :unsupported_grant_type}
+      module -> {:ok, &module.token/5}
     end
   end
 
@@ -76,15 +86,6 @@ defmodule Gatekeep.TokenEndpoint do
     case ClientAuth.authenticate(config, params, http[:authorization]) do
       {:ok, client, method} -> {:ok, client, method}
       {:error, _reason} -> {:error, :invalid_client}
-    end
-  end
-
-  defp check_grant_type(config, client, grant_type) do
-    cond do
-      grant_type not in @grant_types -> {:error, :unsupported_grant_type}
-      grant_type == @jwt_bearer and is_nil(config.enterprise) -> {:error, :unsupported_grant_type}
-      Client.grant_allowed?(client, grant_type) -> :ok
-      true -> {:error, :unauthorized_client}
     end
   end
 
@@ -193,8 +194,13 @@ defmodule Gatekeep.TokenEndpoint do
     if Util.same_url?(param, resource.id), do: :ok, else: {:error, :invalid_target}
   end
 
-  defp check_dpop_required(%Resource{dpop: :required}, nil), do: {:error, :invalid_dpop_proof}
-  defp check_dpop_required(_resource, _jkt), do: :ok
+  @doc """
+  `{:error, :invalid_dpop_proof}` when `resource` requires DPoP and the
+  request had no proof. For `Gatekeep.Grant` modules.
+  """
+  @spec check_dpop_required(Resource.t(), String.t() | nil) :: :ok | {:error, :invalid_dpop_proof}
+  def check_dpop_required(%Resource{dpop: :required}, nil), do: {:error, :invalid_dpop_proof}
+  def check_dpop_required(_resource, _jkt), do: :ok
 
   # Only the client the code was issued to, authenticated the way its
   # resource requires, revokes the grant by reusing the code. Another client
@@ -302,36 +308,15 @@ defmodule Gatekeep.TokenEndpoint do
     end
   end
 
-  ## Client credentials
+  ## For grant modules
 
-  # A machine client acts as itself. It must hold a credential: a public
-  # client can't use this grant, whatever its metadata says.
-  defp client_credentials(config, client, method, params, jkt) do
-    with :ok <- Util.expect(method != "none", :unauthorized_client),
-         {:ok, resource} <- grant_resource(config, params["resource"], params["scope"]),
-         :ok <- Util.expect(method in resource.client_auth_methods, :unauthorized_client),
-         :ok <- check_dpop_required(resource, jkt),
-         {:ok, scopes} <- client_scopes(resource, client, params["scope"]) do
-      {:ok, grant} =
-        Storage.call(config, :insert_grant, [
-          %{
-            client_id: client.client_id,
-            client_name: client.client_name,
-            subject: client.subject || client.client_id,
-            resource: resource.id,
-            scopes: scopes,
-            claims: %{},
-            grant_type: "client_credentials",
-            dpop_jkt: jkt,
-            expires_at: Util.in_seconds(config.access_token_ttl)
-          }
-        ])
-
-      {:ok, issue_access_token(config, grant, scopes, jkt)}
-    end
-  end
-
-  @doc false
+  @doc """
+  The resource a token request is for: the `resource` parameter, or the
+  resource its scopes name, or `:default_resource`. For `Gatekeep.Grant`
+  modules.
+  """
+  @spec grant_resource(Config.t(), term(), term()) ::
+          {:ok, Resource.t()} | {:error, :invalid_target | :invalid_scope}
   def grant_resource(config, resource_param, scope) do
     case Gatekeep.Authorization.select_resource(config, resource_param, scope) do
       {:ok, resource} -> {:ok, resource}
@@ -340,7 +325,13 @@ defmodule Gatekeep.TokenEndpoint do
     end
   end
 
-  @doc false
+  @doc """
+  The scopes a token request gets at `resource`: the requested ones (or the
+  resource's defaults), limited to what `client` may have. For `Gatekeep.Grant`
+  modules.
+  """
+  @spec client_scopes(Resource.t(), Client.t(), term()) ::
+          {:ok, [String.t()]} | {:error, :invalid_scope}
   def client_scopes(resource, client, scope) do
     case Gatekeep.Authorization.requested_scopes(resource, client, scope) do
       {:ok, scopes} -> {:ok, scopes}
@@ -350,8 +341,11 @@ defmodule Gatekeep.TokenEndpoint do
 
   ## Access tokens
 
-  @doc false
-  # Issues an access token under `grant` and returns the token response.
+  @doc """
+  Issues an access token under `grant`, bound to the DPoP key `jkt` if any,
+  and returns the token response body. For `Gatekeep.Grant` modules.
+  """
+  @spec issue_access_token(Config.t(), Storage.grant(), [String.t()], String.t() | nil) :: map()
   def issue_access_token(config, grant, scopes, jkt) do
     {token, expires_at} = mint(config, grant, scopes, jkt)
 

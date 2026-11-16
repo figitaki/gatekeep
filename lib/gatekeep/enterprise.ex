@@ -59,6 +59,8 @@ defmodule Gatekeep.Enterprise do
   instead, which keeps the IdP's policy in force.
   """
 
+  @behaviour Gatekeep.Grant
+
   alias Gatekeep.{Cache, Client, Config, Fetcher, JOSE, Storage, TokenEndpoint, Util}
 
   @typ "oauth-id-jag+jwt"
@@ -100,19 +102,24 @@ defmodule Gatekeep.Enterprise do
   @callback resolve_subject(claims :: map(), issuer()) ::
               {:ok, keyword()} | {:error, :access_denied}
 
-  @doc false
-  def exchange(%Config{enterprise: nil}, _client, _method, _params, _jkt),
-    do: {:error, :unsupported_grant_type}
+  @impl Gatekeep.Grant
+  def grant_type, do: "urn:ietf:params:oauth:grant-type:jwt-bearer"
 
-  def exchange(%Config{} = config, client, method, params, jkt) do
+  @impl Gatekeep.Grant
+  def enabled?(%Config{enterprise: enterprise}), do: not is_nil(enterprise)
+
+  @impl Gatekeep.Grant
+  def metadata(_config),
+    do: %{
+      "authorization_grant_profiles_supported" => ["urn:ietf:params:oauth:grant-profile:id-jag"]
+    }
+
+  @impl Gatekeep.Grant
+  def token(%Config{} = config, client, method, params, jkt) do
     with {:ok, claims, trust} <- verify(config, params["assertion"], client, jkt),
          {:ok, resource} <- resource(config, claims, params["resource"]),
          :ok <- Util.expect(method in resource.client_auth_methods, :unauthorized_client),
-         :ok <-
-           if(resource.dpop == :required and is_nil(jkt),
-             do: {:error, :invalid_dpop_proof},
-             else: :ok
-           ),
+         :ok <- TokenEndpoint.check_dpop_required(resource, jkt),
          {:ok, scopes} <- scopes(resource, client, claims["scope"], params["scope"]),
          {:ok, local} <- resolve(config, claims, trust),
          {:ok, scopes} <- narrow(scopes, local[:scopes]) do
