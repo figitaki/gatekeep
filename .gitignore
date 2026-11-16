@@ -1,0 +1,10 @@
+/_build/
+/deps/
+/doc/
+/cover/
+/priv/plts/
+erl_crash.dump
+*.ez
+gatekeep-*.tar
+/tmp/
+.amp/in/
