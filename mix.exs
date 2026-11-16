@@ -98,6 +98,7 @@ defmodule Gatekeep.MixProject do
         Plugs: [Gatekeep.Plug.Endpoints, Gatekeep.Plug.Authorize, Gatekeep.Plug.Resource],
         "Extension points": [
           Gatekeep.Consent,
+          Gatekeep.Grant,
           Gatekeep.Storage,
           Gatekeep.Signer,
           Gatekeep.Signer.Local,

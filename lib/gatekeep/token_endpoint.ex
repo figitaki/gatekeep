@@ -12,7 +12,7 @@ defmodule Gatekeep.TokenEndpoint do
       `rotate_refresh_tokens` (the default) issue a new refresh token each
       time; presenting any replaced one revokes the grant and every token
       issued under it.
-    * Extension grants, each a `Gatekeep.Grant`: `client_credentials`
+    * Extension grants, each a `Gatekeep.Grant` module: `client_credentials`
       (`Gatekeep.ClientCredentials`) and the identity assertion grant of
       enterprise-managed authorization (`Gatekeep.Enterprise`).
 
