@@ -291,6 +291,18 @@ defmodule Gatekeep.ResourceTest do
       assert json_body(conn)["error"] == "unauthorized_client"
     end
 
+    test "a metadata document client declaring the grant can't use it" do
+      client = TestClient.new(metadata: %{"grant_types" => ["client_credentials"]})
+
+      conn =
+        post_form(
+          "/oauth/token",
+          Map.put(TestClient.client_auth(client), "grant_type", "client_credentials")
+        )
+
+      assert json_body(conn)["error"] == "unauthorized_client"
+    end
+
     test "the metadata lists the grant" do
       assert "client_credentials" in json_body(get_path("/.well-known/oauth-authorization-server"))[
                "grant_types_supported"

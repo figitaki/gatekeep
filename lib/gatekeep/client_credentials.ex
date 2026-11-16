@@ -23,7 +23,10 @@ defmodule Gatekeep.ClientCredentials do
 
   @impl true
   def token(config, client, method, params, jkt) do
-    with :ok <- Util.expect(method != "none", :unauthorized_client),
+    # Only clients the app configured: a metadata document client could
+    # otherwise declare the grant and its own keys and mint tokens unasked.
+    with :ok <- Util.expect(client.kind == :static, :unauthorized_client),
+         :ok <- Util.expect(method != "none", :unauthorized_client),
          {:ok, resource} <-
            TokenEndpoint.grant_resource(config, params["resource"], params["scope"]),
          :ok <- Util.expect(method in resource.client_auth_methods, :unauthorized_client),
