@@ -153,8 +153,8 @@ defmodule Gatekeep.Storage do
   @callback get_client(opts(), client_id :: String.t()) :: {:ok, registered_client()} | :error
 
   @doc """
-  Records `jti` of `kind` for `scope` (such as a client ID or a DPoP key)
-  until `expires_at`. `{:error, :replayed}` when it was
+  Records `jti` of `kind` for `scope` (such as a client ID, a DPoP key, or an
+  enterprise issuer) until `expires_at`. `{:error, :replayed}` when it was
   recorded already, by any server. Should prune expired entries from time to
   time.
   """

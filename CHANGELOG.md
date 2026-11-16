@@ -22,6 +22,8 @@ The first pre-release. APIs may change before 0.1.0.
 - DPoP (RFC 9449): proof verification, bound access and refresh tokens,
   `dpop_jkt` code binding, and `dpop_bound_access_tokens` enforcement.
 - The client credentials grant.
+- Enterprise-managed authorization: the identity assertion JWT authorization
+  grant (ID-JAG).
 - `Gatekeep.Storage` with an Ecto/PostgreSQL adapter and migrations,
   `Gatekeep.Signer` with `Gatekeep.Signer.Local` for JWT access tokens, and the
   `Gatekeep.FastestMCP` authenticator.

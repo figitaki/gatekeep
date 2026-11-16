@@ -12,8 +12,9 @@ defmodule Gatekeep.TokenEndpoint do
       `rotate_refresh_tokens` (the default) issue a new refresh token each
       time; presenting any replaced one revokes the grant and every token
       issued under it.
-    * Extension grants, each a `Gatekeep.Grant` module: `client_credentials`
-      (`Gatekeep.ClientCredentials`).
+    * Extension grants, each a `Gatekeep.Grant`: `client_credentials`
+      (`Gatekeep.ClientCredentials`) and the identity assertion grant of
+      enterprise-managed authorization (`Gatekeep.Enterprise`).
 
   ## DPoP
 
@@ -30,7 +31,7 @@ defmodule Gatekeep.TokenEndpoint do
   alias Gatekeep.{Client, ClientAuth, Config, DPoP, Resource, Storage, Util}
 
   # Grants beyond authorization_code and refresh_token, each a Gatekeep.Grant.
-  @extension_grants [Gatekeep.ClientCredentials]
+  @extension_grants [Gatekeep.ClientCredentials, Gatekeep.Enterprise]
 
   @typedoc """
   The HTTP request around the form parameters: its `Authorization` header and

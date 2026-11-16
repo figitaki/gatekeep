@@ -1,7 +1,7 @@
 defmodule Gatekeep.Cache do
   @moduledoc false
-  # A per-issuer ETS cache of fetched documents, such as client metadata with
-  # its key set. Entries are
+  # A per-issuer ETS cache of fetched documents: client metadata with its key
+  # set, and enterprise issuers' key sets. Entries are
   # `{key, value, expires_at, fetched_at}`. Expired entries are swept every
   # minute, and the table holds at most `:client_cache_size` entries; past
   # that, results are used but not cached, so unknown IDs can't grow memory
