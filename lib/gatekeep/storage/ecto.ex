@@ -11,7 +11,7 @@ defmodule Gatekeep.Storage.Ecto do
       defmodule MyApp.Repo.Migrations.AddGatekeep do
         use Ecto.Migration
 
-        def up, do: Gatekeep.Storage.Ecto.Migration.up(version: 1)
+        def up, do: Gatekeep.Storage.Ecto.Migration.up(version: 2)
         def down, do: Gatekeep.Storage.Ecto.Migration.down(version: 1)
       end
 
@@ -22,7 +22,7 @@ defmodule Gatekeep.Storage.Ecto do
 
   The tables are `gatekeep_grants`, `gatekeep_codes`,
   `gatekeep_access_tokens`, `gatekeep_consumed_refresh_tokens`,
-  `gatekeep_clients`, and `gatekeep_seen_jtis`; see
+  `gatekeep_clients`, `gatekeep_device_codes`, and `gatekeep_seen_jtis`; see
   `Gatekeep.Storage.Ecto.Migration` for their columns. To move grants from
   another issuer without signing everyone out, copy its rows into them:
 
@@ -45,7 +45,7 @@ defmodule Gatekeep.Storage.Ecto do
 
   import Ecto.Query, only: [from: 2]
 
-  alias Gatekeep.Storage.Ecto.{AccessToken, Code, Grant, RegisteredClient}
+  alias Gatekeep.Storage.Ecto.{AccessToken, Code, DeviceCode, Grant, RegisteredClient}
 
   @impl true
   def transaction(opts, fun) do
@@ -209,6 +209,67 @@ defmodule Gatekeep.Storage.Ecto do
       from(t in AccessToken, where: t.token_hash == ^hash and is_nil(t.revoked_at)),
       set: [revoked_at: now]
     )
+
+    :ok
+  end
+
+  @impl true
+  def insert_device_code(opts, device_code) do
+    repo = repo(opts)
+
+    # Expired requests can't be redeemed or decided; about one insert in
+    # fifty clears them, so a flood of requests doesn't pile up.
+    if :rand.uniform(50) == 1 do
+      now = DateTime.utc_now()
+      repo.delete_all(from d in DeviceCode, where: d.expires_at < ^now)
+    end
+
+    case repo.insert(struct!(DeviceCode, device_code),
+           on_conflict: :nothing,
+           conflict_target: :user_code_hash
+         ) do
+      {:ok, %DeviceCode{id: nil}} -> {:error, :conflict}
+      {:ok, _} -> :ok
+    end
+  end
+
+  @impl true
+  def get_device_code(opts, user_code_hash) do
+    case repo(opts).get_by(DeviceCode, user_code_hash: user_code_hash) do
+      nil -> :error
+      device_code -> {:ok, to_map(device_code)}
+    end
+  end
+
+  @impl true
+  def decide_device_code(opts, user_code_hash, changes, now) do
+    query =
+      from d in DeviceCode,
+        where:
+          d.user_code_hash == ^user_code_hash and d.status == "pending" and d.expires_at > ^now,
+        select: d
+
+    case repo(opts).update_all(query, set: Map.to_list(changes)) do
+      {1, [device_code]} -> {:ok, to_map(device_code)}
+      {0, _} -> :error
+    end
+  end
+
+  @impl true
+  def lock_device_code(opts, device_code_hash) do
+    query =
+      from d in DeviceCode, where: d.device_code_hash == ^device_code_hash, lock: "FOR UPDATE"
+
+    case repo(opts).one(query) do
+      nil -> :error
+      device_code -> {:ok, to_map(device_code)}
+    end
+  end
+
+  @impl true
+  def update_device_code(opts, device_code_hash, changes) do
+    query = from d in DeviceCode, where: d.device_code_hash == ^device_code_hash
+    {_count, _} = repo(opts).update_all(query, set: Map.to_list(changes))
 
     :ok
   end

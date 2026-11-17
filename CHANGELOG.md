@@ -25,6 +25,12 @@ The first pre-release. APIs may change before 0.1.0.
   `Gatekeep.Signer` with `Gatekeep.Signer.Local` for JWT access tokens, and the
   `Gatekeep.FastestMCP` authenticator.
 - `Gatekeep.Grant`, the behaviour of extension grants.
+- The device authorization grant (RFC 8628), `Gatekeep.DeviceAuthorization`,
+  turned on by `:device_verification_uri`, with `slow_down` and
+  `expired_token`. Storage migration version 2 adds its table; `up/1` and
+  `down/1` now run only the versions a database is missing.
+- The resource option `:allowed_clients`, which limits a resource's tokens to
+  listed clients, such as an app's own command-line tool.
 - `:registered_client_prefix`, so registered client IDs from an earlier
   issuer keep working.
 

@@ -11,7 +11,6 @@ defmodule Gatekeep.Metadata do
   def authorization_server(%Config{} = config) do
     resources = Config.enabled_resources(config)
     methods = resources |> Enum.flat_map(& &1.client_auth_methods) |> Enum.uniq()
-    public? = "none" in methods
     jwt_methods = Enum.filter(methods, &(&1 == "private_key_jwt")) != []
     grants = TokenEndpoint.grants(config)
     grant_types = ["authorization_code", "refresh_token"] ++ Enum.map(grants, & &1.grant_type())
@@ -21,7 +20,8 @@ defmodule Gatekeep.Metadata do
       "authorization_endpoint" => Config.endpoint(config, :authorize),
       "token_endpoint" => Config.endpoint(config, :token),
       "revocation_endpoint" => Config.endpoint(config, :revoke),
-      "registration_endpoint" => if(public?, do: Config.endpoint(config, :register)),
+      "registration_endpoint" =>
+        if(Config.public_clients?(config), do: Config.endpoint(config, :register)),
       "jwks_uri" => if(config.access_token_format == :jwt, do: Config.endpoint(config, :jwks)),
       "response_types_supported" => ["code"],
       "response_modes_supported" => ["query"],

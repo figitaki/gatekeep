@@ -17,6 +17,7 @@ defmodule Gatekeep.Resource do
     :client_auth_methods,
     :rotate_refresh_tokens,
     :dpop,
+    :allowed_clients,
     :enabled,
     :name,
     :metadata
@@ -30,6 +31,7 @@ defmodule Gatekeep.Resource do
           client_auth_methods: [String.t()],
           rotate_refresh_tokens: boolean(),
           dpop: :optional | :required,
+          allowed_clients: [String.t()] | nil,
           enabled: boolean(),
           name: String.t() | nil,
           metadata: map()
@@ -63,10 +65,22 @@ defmodule Gatekeep.Resource do
       client_auth_methods: opts[:client_auth_methods],
       rotate_refresh_tokens: opts[:rotate_refresh_tokens],
       dpop: opts[:dpop],
+      allowed_clients: opts[:allowed_clients],
       enabled: opts[:enabled],
       name: opts[:name],
       metadata: opts[:metadata]
     }
+  end
+
+  @doc """
+  Whether `client` may get the resource's tokens, authenticated with
+  `method`: the resource takes that method, and lists the client in
+  `allowed_clients` if it lists any.
+  """
+  @spec allows?(t(), Gatekeep.Client.t(), String.t()) :: boolean()
+  def allows?(%__MODULE__{} = resource, %Gatekeep.Client{} = client, method) do
+    method in resource.client_auth_methods and
+      (is_nil(resource.allowed_clients) or client.client_id in resource.allowed_clients)
   end
 
   @doc """
