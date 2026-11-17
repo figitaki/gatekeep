@@ -6,29 +6,76 @@ defmodule Gatekeep.Storage.Ecto.Migration do
       defmodule MyApp.Repo.Migrations.AddGatekeep do
         use Ecto.Migration
 
-        def up, do: Gatekeep.Storage.Ecto.Migration.up(version: 1)
+        def up, do: Gatekeep.Storage.Ecto.Migration.up(version: 2)
         def down, do: Gatekeep.Storage.Ecto.Migration.down(version: 1)
       end
 
-  Later releases that change the tables add versions; a new migration then
-  calls `up(version: 2)`, and so on, as Oban does.
+  Later releases that change the tables add versions. To upgrade, add a
+  migration that calls `up(version: 2)`, and so on, as Oban does; it runs
+  only the versions the database doesn't have yet, which it records in a
+  comment on `gatekeep_grants`. Tables created by version 1, before the
+  comment existed, count as version 1.
+
+      defmodule MyApp.Repo.Migrations.UpgradeGatekeepToV2 do
+        use Ecto.Migration
+
+        def up, do: Gatekeep.Storage.Ecto.Migration.up(version: 2)
+        def down, do: Gatekeep.Storage.Ecto.Migration.down(version: 2)
+      end
+
+  Versions:
+
+    1. Grants, codes, access tokens, consumed refresh tokens, registered
+       clients, and the replay cache.
+    2. Device authorization requests (`Gatekeep.DeviceAuthorization`).
   """
 
   use Ecto.Migration
 
-  @current 1
+  @current 2
 
-  @doc "Migrates up to `:version` (default: the current one)."
+  @doc "Migrates up to `:version` (default: the current one), from the version the database has."
   def up(opts \\ []) do
-    for version <- 1..Keyword.get(opts, :version, @current)//1, do: change(version, :up)
+    target = Keyword.get(opts, :version, @current)
+    initial = migrated_version()
+
+    if target > initial do
+      for version <- (initial + 1)..target//1, do: change(version, :up)
+      record_version(target)
+    end
+
     :ok
   end
 
-  @doc "Migrates down from `:version` (default: the current one) to nothing."
+  @doc """
+  Undoes `:version` and every later version the database has (default: 1,
+  which drops every table).
+  """
   def down(opts \\ []) do
-    for version <- Keyword.get(opts, :version, @current)..1//-1, do: change(version, :down)
+    target = Keyword.get(opts, :version, 1)
+    initial = migrated_version()
+
+    if initial >= target do
+      for version <- initial..target//-1, do: change(version, :down)
+      if target > 1, do: record_version(target - 1)
+    end
+
     :ok
   end
+
+  defp migrated_version do
+    %{rows: [[version]]} =
+      repo().query!(
+        "SELECT CASE WHEN to_regclass('gatekeep_grants') IS NULL THEN 0 " <>
+          "ELSE coalesce(obj_description(to_regclass('gatekeep_grants'), 'pg_class'), '1')::int END",
+        [],
+        log: false
+      )
+
+    version
+  end
+
+  defp record_version(version), do: execute("COMMENT ON TABLE gatekeep_grants IS '#{version}'")
 
   defp change(1, :up) do
     # One row per approved authorization. Its refresh token is the grant.
@@ -137,5 +184,40 @@ defmodule Gatekeep.Storage.Ecto.Migration do
     drop table(:gatekeep_access_tokens)
     drop table(:gatekeep_codes)
     drop table(:gatekeep_grants)
+  end
+
+  defp change(2, :up) do
+    # Device authorization requests (RFC 8628), from the request until the
+    # device redeems the approval or the code expires.
+    create table(:gatekeep_device_codes) do
+      add :device_code_hash, :binary, null: false
+      add :user_code_hash, :binary, null: false
+      add :client_id, :text, null: false
+      add :client_name, :text
+      add :resource, :text, null: false
+      # Requested scopes, narrowed to the granted ones on approval.
+      add :scopes, {:array, :text}, null: false
+      # pending, approved, or denied.
+      add :status, :text, null: false, default: "pending"
+      add :subject, :text
+      add :owner, :text
+      add :claims, :map, null: false, default: %{}
+      # Seconds the device must wait between polls; slow_down raises it.
+      add :interval, :integer, null: false
+      add :last_polled_at, :utc_datetime
+      add :expires_at, :utc_datetime, null: false
+      add :consumed_at, :utc_datetime
+      add :grant_id, references(:gatekeep_grants, on_delete: :nilify_all)
+
+      timestamps(type: :utc_datetime, updated_at: false)
+    end
+
+    create unique_index(:gatekeep_device_codes, [:device_code_hash])
+    create unique_index(:gatekeep_device_codes, [:user_code_hash])
+    create index(:gatekeep_device_codes, [:expires_at])
+  end
+
+  defp change(2, :down) do
+    drop table(:gatekeep_device_codes)
   end
 end

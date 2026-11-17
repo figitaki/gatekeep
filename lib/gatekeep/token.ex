@@ -9,7 +9,8 @@ defmodule Gatekeep.Token do
       grant takes effect on the next request;
     * its audience is the resource checking it (RFC 8707): a token issued for
       one resource is refused by every other;
-    * its client is not blocked;
+    * its client is not blocked, and is one of the resource's
+      `allowed_clients` if it lists any;
     * a DPoP-bound token comes with `Authorization: DPoP` and a valid proof
       from the bound key, covering the token with `ath`; a bound token sent
       as Bearer is refused, so a stolen token is useless without the key.
@@ -125,6 +126,7 @@ defmodule Gatekeep.Token do
          :gt <- DateTime.compare(record.expires_at, now),
          true <- Util.same_url?(record.resource, resource.id),
          true <- resource.enabled,
+         true <- is_nil(resource.allowed_clients) or record.client_id in resource.allowed_clients,
          true <- grant_active?(record.grant),
          false <- record.client_id in config.blocked_clients do
       {:ok, record}

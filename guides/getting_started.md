@@ -189,3 +189,31 @@ MyApp.Auth.revoke_grant(grant.id)
 
 Pass `owner:` to `Gatekeep.Authorization.approve/3` when the subject and the
 person managing the grant differ, such as agents acting for a user.
+
+## Devices and command-line tools
+
+A command-line tool, possibly running over SSH or in a container, can't
+receive a redirect. The device authorization grant (RFC 8628) signs it in
+from any browser instead. Turn it on with a verification page and a client
+that lists the grant:
+
+```elixir
+device_verification_uri: "/device",
+clients: [
+  [
+    client_id: "my-cli",
+    public: true,
+    grant_types: ["urn:ietf:params:oauth:grant-type:device_code", "refresh_token"]
+  ]
+]
+```
+
+The tool posts `client_id` to `/oauth/device_authorization`, shows the
+`user_code` and `verification_uri`, and polls the token endpoint at the
+returned `interval`. Your `/device` page signs the user in, shows the
+request from `Gatekeep.DeviceAuthorization.lookup/2`, and calls
+`Gatekeep.DeviceAuthorization.approve/3` or `deny/2` from a POST. Limit
+wrong-code attempts per person on that page.
+
+To keep a resource for your own tool only, list it in the resource's
+`allowed_clients`.

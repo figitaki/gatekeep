@@ -23,6 +23,9 @@ the specific reason stays internal.
 | Expired codes | 120-second lifetime | "an expired code" |
 | Refresh token theft | Rotation; reuse of any replaced token revokes the grant; another client presenting it changes nothing | "refresh tokens" |
 | Audience confusion | Token requests may only repeat the grant's resource | "naming another resource", "can't be moved" |
+| Device code polling floods | Polls faster than `interval` get `slow_down` and 5 more seconds; codes expire after 10 minutes | `device_authorization_test.exs` "slow_down", "expired" |
+| Device code replay | Redeemed once, under a row lock; presenting it again revokes the grant; another client's poll changes nothing | "redeemed once", "another client's device code" |
+| User code guessing and phishing | 8 letters from 20 consonants (~34 bits); approval only of pending, unexpired codes; the app's page must rate-limit and approve by POST | "approval may narrow", `Gatekeep.DeviceAuthorization` |
 | Forged client assertions | Keys only from the client's key set; `aud` the issuer; 5-minute lifetime; `jti` once | "client authentication" |
 | Stale keys | Cache expires; unknown `kid` refetches at most every 30 s | "a key removed from jwks_uri" |
 | SSRF via metadata URLs | HTTPS only, no redirects, private addresses refused, connection pinned to the checked address, 100 KB limit | `Gatekeep.Fetcher` |

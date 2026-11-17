@@ -8,6 +8,7 @@ defmodule Gatekeep.Grant do
   before it calls `c:token/5`. A grant module then checks its own input and
   issues a token with `Gatekeep.TokenEndpoint.issue_access_token/4`, using
   `Gatekeep.TokenEndpoint.grant_resource/3`,
+  `Gatekeep.TokenEndpoint.check_resource_usable/3`,
   `Gatekeep.TokenEndpoint.client_scopes/3`, and
   `Gatekeep.TokenEndpoint.check_dpop_required/2` as needed.
   """

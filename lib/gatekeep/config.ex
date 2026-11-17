@@ -40,6 +40,14 @@ defmodule Gatekeep.Config do
         "`:optional` binds tokens to a DPoP key when the token request carries a proof. " <>
           "`:required` issues no Bearer tokens for this resource."
     ],
+    allowed_clients: [
+      type: {:or, [{:list, :string}, nil]},
+      default: nil,
+      doc:
+        "The only client IDs that may get this resource's tokens, or nil for any client, such " <>
+          "as an app's own command-line tool. A resource that lists its clients doesn't turn " <>
+          "on dynamic client registration."
+    ],
     enabled: [type: :boolean, default: true, doc: "Whether tokens are issued for the resource."],
     name: [type: {:or, [:string, nil]}, default: nil, doc: "`resource_name` in its metadata."],
     metadata: [
@@ -77,7 +85,9 @@ defmodule Gatekeep.Config do
     grant_types: [
       type: {:list, :string},
       default: ["authorization_code", "refresh_token"],
-      doc: ~s(Grants the client may use, such as `"authorization_code"` and `"refresh_token"`.)
+      doc:
+        ~s(Grants the client may use, such as `"authorization_code"`, `"refresh_token"`, and ) <>
+          ~s(`"urn:ietf:params:oauth:grant-type:device_code"`.)
     ],
     scopes: [
       type: {:or, [{:list, :string}, nil]},
@@ -157,7 +167,28 @@ defmodule Gatekeep.Config do
       default: [],
       doc:
         "Endpoint paths under the issuer: `:authorize` (`/oauth/authorize`), `:token`, " <>
-          "`:revoke`, `:register`, and `:jwks` (`/oauth/<name>`)."
+          "`:revoke`, `:register`, `:jwks` (`/oauth/<name>`), and `:device_authorization` " <>
+          "(`/oauth/device_authorization`)."
+    ],
+    device_verification_uri: [
+      type: {:custom, __MODULE__, :validate_verification_uri, []},
+      default: nil,
+      doc:
+        "The page where people enter a device's user code (RFC 8628 §3.2), as a path under " <>
+          "the issuer, such as `\"/device\"`, or an absolute URL. Setting it turns on the " <>
+          "device authorization grant; see `Gatekeep.DeviceAuthorization`."
+    ],
+    device_code_ttl: [
+      type: :pos_integer,
+      default: 600,
+      doc: "How long a device code and its user code wait for approval, seconds."
+    ],
+    device_poll_interval: [
+      type: :pos_integer,
+      default: 5,
+      doc:
+        "The seconds a device waits between token requests. Polling faster gets `slow_down` " <>
+          "and 5 more seconds (RFC 8628 §3.5)."
     ],
     code_ttl: [type: :pos_integer, default: 120, doc: "Authorization code lifetime, seconds."],
     access_token_ttl: [type: :pos_integer, default: 3600, doc: "Access token lifetime, seconds."],
@@ -237,7 +268,8 @@ defmodule Gatekeep.Config do
     token: "/oauth/token",
     revoke: "/oauth/revoke",
     register: "/oauth/register",
-    jwks: "/oauth/jwks"
+    jwks: "/oauth/jwks",
+    device_authorization: "/oauth/device_authorization"
   ]
 
   @doc false
@@ -246,6 +278,24 @@ defmodule Gatekeep.Config do
       do: {:ok, prefix},
       else: {:error, "expected letters and digits ending in \"_\", got: #{inspect(prefix)}"}
   end
+
+  @doc false
+  def validate_verification_uri(nil), do: {:ok, nil}
+  def validate_verification_uri("/" <> _ = path), do: {:ok, path}
+
+  def validate_verification_uri(uri) when is_binary(uri) do
+    case URI.parse(uri) do
+      %URI{scheme: scheme, host: host, fragment: nil}
+      when scheme in ["https", "http"] and is_binary(host) and host != "" ->
+        {:ok, uri}
+
+      _ ->
+        {:error, "expected a path or an HTTP(S) URL, got: #{inspect(uri)}"}
+    end
+  end
+
+  def validate_verification_uri(uri),
+    do: {:error, "expected a path or an HTTP(S) URL, got: #{inspect(uri)}"}
 
   @doc "Validates `opts` and builds the config. Raises `ArgumentError` on invalid options."
   @spec new!(keyword()) :: t()
@@ -296,8 +346,28 @@ defmodule Gatekeep.Config do
 
   def resource(_config, _id), do: nil
 
-  @doc "Whether an enabled resource takes public clients, which turns on registration."
+  @doc """
+  Whether an enabled resource takes any public client, which turns on
+  registration. A resource that lists its `allowed_clients` doesn't count:
+  a registered client could never be one of them.
+  """
   @spec public_clients?(t()) :: boolean()
-  def public_clients?(config),
-    do: Enum.any?(enabled_resources(config), &("none" in &1.client_auth_methods))
+  def public_clients?(config) do
+    Enum.any?(
+      enabled_resources(config),
+      &("none" in &1.client_auth_methods and is_nil(&1.allowed_clients))
+    )
+  end
+
+  @doc """
+  The page where people enter user codes, as an absolute URL, or nil when
+  the device authorization grant is off.
+  """
+  @spec device_verification_uri(t()) :: String.t() | nil
+  def device_verification_uri(%__MODULE__{device_verification_uri: nil}), do: nil
+
+  def device_verification_uri(%__MODULE__{device_verification_uri: "/" <> _ = path} = config),
+    do: config.issuer <> path
+
+  def device_verification_uri(%__MODULE__{device_verification_uri: uri}), do: uri
 end
