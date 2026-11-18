@@ -139,9 +139,10 @@ defmodule Gatekeep.Authorization do
     end
   end
 
-  # A client must be able to authenticate the way the resource needs.
+  # A client must be one the resource admits, able to authenticate the way
+  # the resource needs.
   defp check_client_method(resource, client) do
-    if Enum.any?(client.auth_methods, &(&1 in resource.client_auth_methods)),
+    if Enum.any?(client.auth_methods, &Resource.allows?(resource, client, &1)),
       do: :ok,
       else: {:error, "unauthorized_client"}
   end

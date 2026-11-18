@@ -78,6 +78,24 @@ defmodule Gatekeep.Storage do
           optional(:grant) => grant() | nil
         }
 
+  @type device_code :: %{
+          required(:device_code_hash) => binary(),
+          required(:user_code_hash) => binary(),
+          required(:client_id) => String.t(),
+          required(:resource) => String.t(),
+          required(:scopes) => [String.t()],
+          required(:interval) => pos_integer(),
+          required(:expires_at) => DateTime.t(),
+          optional(:client_name) => String.t() | nil,
+          optional(:status) => String.t(),
+          optional(:subject) => String.t() | nil,
+          optional(:owner) => String.t() | nil,
+          optional(:claims) => map(),
+          optional(:last_polled_at) => DateTime.t() | nil,
+          optional(:consumed_at) => DateTime.t() | nil,
+          optional(:grant_id) => term() | nil
+        }
+
   @type registered_client :: %{
           client_id: String.t(),
           client_name: String.t() | nil,
@@ -147,6 +165,38 @@ defmodule Gatekeep.Storage do
   @callback get_access_token(opts(), hash :: binary()) :: {:ok, access_token()} | :error
 
   @callback revoke_access_token(opts(), hash :: binary(), now :: DateTime.t()) :: :ok
+
+  @doc """
+  Inserts a device authorization request (RFC 8628) with `status`
+  `"pending"`. `{:error, :conflict}` when a live request has the same
+  `user_code_hash`. Should prune expired requests from time to time.
+  """
+  @callback insert_device_code(opts(), device_code()) :: :ok | {:error, :conflict}
+
+  @doc "The device authorization request with `user_code_hash`, in any state."
+  @callback get_device_code(opts(), user_code_hash :: binary()) :: {:ok, device_code()} | :error
+
+  @doc """
+  Applies the user's decision, `changes` such as `%{status: "approved",
+  subject: ...}`, to the request with `user_code_hash`, only while it is
+  `"pending"` and expires after `now`. `:error` otherwise.
+  """
+  @callback decide_device_code(
+              opts(),
+              user_code_hash :: binary(),
+              changes :: map(),
+              now :: DateTime.t()
+            ) :: {:ok, device_code()} | :error
+
+  @doc """
+  The device authorization request with `device_code_hash`, locked until
+  the transaction ends, so polls of one code take turns.
+  """
+  @callback lock_device_code(opts(), device_code_hash :: binary()) ::
+              {:ok, device_code()} | :error
+
+  @doc "Updates the request with `device_code_hash`: `:interval`, `:last_polled_at`, `:consumed_at`, `:grant_id`."
+  @callback update_device_code(opts(), device_code_hash :: binary(), changes :: map()) :: :ok
 
   @callback insert_client(opts(), registered_client()) :: :ok
 

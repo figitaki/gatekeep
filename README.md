@@ -112,6 +112,8 @@ walks through each step, including the consent controller.
 - DPoP (RFC 9449): proof checks, bound access and refresh tokens, `dpop_jkt`,
   and enforcement for clients that declare `dpop_bound_access_tokens`.
 - The client credentials grant for machine clients.
+- The device authorization grant (RFC 8628) for command-line tools and
+  other clients that can't take a redirect.
 - Behaviours for storage (Ecto adapter included), consent, signing, and
   extension grants, and an authenticator for FastestMCP.
 

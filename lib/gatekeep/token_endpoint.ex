@@ -12,8 +12,9 @@ defmodule Gatekeep.TokenEndpoint do
       `rotate_refresh_tokens` (the default) issue a new refresh token each
       time; presenting any replaced one revokes the grant and every token
       issued under it.
-    * Extension grants, each a `Gatekeep.Grant` module: `client_credentials`
-      (`Gatekeep.ClientCredentials`).
+    * Extension grants, each a `Gatekeep.Grant` module: the device
+      authorization grant (`Gatekeep.DeviceAuthorization`) and
+      `client_credentials` (`Gatekeep.ClientCredentials`).
 
   ## DPoP
 
@@ -30,7 +31,7 @@ defmodule Gatekeep.TokenEndpoint do
   alias Gatekeep.{Client, ClientAuth, Config, DPoP, Resource, Storage, Util}
 
   # Grants beyond authorization_code and refresh_token, each a Gatekeep.Grant.
-  @extension_grants [Gatekeep.ClientCredentials]
+  @extension_grants [Gatekeep.DeviceAuthorization, Gatekeep.ClientCredentials]
 
   @typedoc """
   The HTTP request around the form parameters: its `Authorization` header and
@@ -48,6 +49,9 @@ defmodule Gatekeep.TokenEndpoint do
           | :unauthorized_client
           | :unsupported_grant_type
           | :access_denied
+          | :authorization_pending
+          | :slow_down
+          | :expired_token
 
   @doc """
   Handles a token request. Returns the token response body, or an OAuth
@@ -136,7 +140,7 @@ defmodule Gatekeep.TokenEndpoint do
          :ok <- Util.expect(row.redirect_uri == params["redirect_uri"]),
          :ok <- check_pkce(row.code_challenge, params["code_verifier"]),
          :ok <- Util.expect(is_nil(row.dpop_jkt) or row.dpop_jkt == jkt),
-         :ok <- check_resource_usable(resource, method),
+         :ok <- check_resource_usable(resource, client, method),
          :ok <- check_resource_param(params["resource"], resource),
          :ok <- check_dpop_required(resource, jkt) do
       refresh_token =
@@ -178,12 +182,16 @@ defmodule Gatekeep.TokenEndpoint do
 
   defp check_pkce(_challenge, _verifier), do: :error
 
-  # A resource that is gone or turned off issues nothing, and a client must
-  # authenticate the way the resource requires.
-  defp check_resource_usable(%Resource{enabled: true} = resource, method),
-    do: Util.expect(method in resource.client_auth_methods)
+  @doc """
+  `:ok` when `resource` is configured and enabled, and admits `client`
+  authenticated with `method` (`Gatekeep.Resource.allows?/3`). A resource
+  that is gone or turned off issues nothing. For `Gatekeep.Grant` modules.
+  """
+  @spec check_resource_usable(Resource.t() | nil, Client.t(), String.t()) :: :ok | :error
+  def check_resource_usable(%Resource{enabled: true} = resource, client, method),
+    do: Util.expect(Resource.allows?(resource, client, method))
 
-  defp check_resource_usable(_resource, _method), do: :error
+  def check_resource_usable(_resource, _client, _method), do: :error
 
   # A token request may repeat the grant's resource (RFC 8707 §2.2), never
   # name another.
@@ -208,14 +216,14 @@ defmodule Gatekeep.TokenEndpoint do
     with {:ok, %{client_id: client_id, grant_id: grant_id} = row} when not is_nil(grant_id) <-
            Storage.call(config, :get_code, [hash]),
          true <- client_id == client.client_id,
-         :ok <- check_method(config, row.resource, method) do
+         :ok <- check_method(config, row.resource, client, method) do
       Storage.call(config, :revoke_grant, [grant_id, Util.now_dt()])
     end
   end
 
-  defp check_method(config, resource_id, method) do
+  defp check_method(config, resource_id, client, method) do
     case Config.resource(config, resource_id) do
-      %Resource{} = resource -> Util.expect(method in resource.client_auth_methods)
+      %Resource{} = resource -> Util.expect(Resource.allows?(resource, client, method))
       nil -> :error
     end
   end
@@ -246,7 +254,7 @@ defmodule Gatekeep.TokenEndpoint do
     resource = Config.resource(config, grant.resource)
 
     with :ok <- Util.expect(grant.client_id == client.client_id),
-         :ok <- check_resource_usable(resource, method),
+         :ok <- check_resource_usable(resource, client, method),
          :ok <- Util.expect(active?(grant)),
          :ok <- Util.expect(is_nil(grant.dpop_jkt) or grant.dpop_jkt == jkt),
          :ok <- check_dpop_required(resource, jkt),
@@ -302,7 +310,7 @@ defmodule Gatekeep.TokenEndpoint do
   defp revoke_reused_refresh_token(config, hash, client, method) do
     with {:ok, grant} <- Storage.call(config, :find_grant_by_consumed_refresh_token, [hash]),
          true <- grant.client_id == client.client_id,
-         :ok <- check_method(config, grant.resource, method) do
+         :ok <- check_method(config, grant.resource, client, method) do
       Storage.call(config, :revoke_grant, [grant.id, Util.now_dt()])
     end
   end

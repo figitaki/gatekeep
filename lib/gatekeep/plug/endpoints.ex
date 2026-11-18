@@ -5,6 +5,8 @@ defmodule Gatekeep.Plug.Endpoints do
     * `POST <token>` - `Gatekeep.TokenEndpoint.token/3`
     * `POST <revoke>` - `Gatekeep.TokenEndpoint.revoke/3`
     * `POST <register>` - `Gatekeep.Registration.register/2`
+    * `POST <device_authorization>` - `Gatekeep.DeviceAuthorization.authorize/3`,
+      when `:device_verification_uri` turns the device grant on
     * `GET <jwks>` - the signer's public keys, with JWT access tokens
     * `GET /.well-known/oauth-authorization-server` - RFC 8414 metadata, also
       at the path-suffixed form of an issuer with a path
@@ -29,7 +31,7 @@ defmodule Gatekeep.Plug.Endpoints do
 
   import Plug.Conn
 
-  alias Gatekeep.{Config, Metadata, Registration, Resource, TokenEndpoint}
+  alias Gatekeep.{Config, DeviceAuthorization, Metadata, Registration, Resource, TokenEndpoint}
 
   @impl true
   def init(opts), do: Keyword.fetch!(opts, :gatekeep)
@@ -47,14 +49,8 @@ defmodule Gatekeep.Plug.Endpoints do
       method == "OPTIONS" and handled?(config, path) ->
         preflight(conn)
 
-      method == "POST" and path == paths[:token] ->
-        token(conn, config)
-
-      method == "POST" and path == paths[:revoke] ->
-        revoke(conn, config)
-
-      method == "POST" and path == paths[:register] ->
-        register(conn, config)
+      method == "POST" ->
+        post(conn, config, Enum.find_value(paths, fn {name, p} -> p == path && name end))
 
       method == "GET" and path == paths[:jwks] and config.access_token_format == :jwt ->
         json(conn, 200, Metadata.jwks(config), :public)
@@ -69,6 +65,16 @@ defmodule Gatekeep.Plug.Endpoints do
         conn
     end
   end
+
+  defp post(conn, config, :token), do: token(conn, config)
+  defp post(conn, config, :revoke), do: revoke(conn, config)
+  defp post(conn, config, :register), do: register(conn, config)
+
+  defp post(conn, config, :device_authorization) do
+    if DeviceAuthorization.enabled?(config), do: device_authorization(conn, config), else: conn
+  end
+
+  defp post(conn, _config, _name), do: conn
 
   defp resource_metadata(conn, _config, nil), do: conn
 
@@ -104,6 +110,16 @@ defmodule Gatekeep.Plug.Endpoints do
   defp token(conn, config) do
     with {:ok, params, conn} <- form_params(conn) do
       case TokenEndpoint.token(config, params, http(conn)) do
+        {:ok, body} -> json(conn, 200, body)
+        {:error, :invalid_client} -> oauth_error(conn, 401, :invalid_client)
+        {:error, error} -> oauth_error(conn, 400, error)
+      end
+    end
+  end
+
+  defp device_authorization(conn, config) do
+    with {:ok, params, conn} <- form_params(conn) do
+      case DeviceAuthorization.authorize(config, params, http(conn)) do
         {:ok, body} -> json(conn, 200, body)
         {:error, :invalid_client} -> oauth_error(conn, 401, :invalid_client)
         {:error, error} -> oauth_error(conn, 400, error)
