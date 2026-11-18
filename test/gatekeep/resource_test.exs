@@ -304,6 +304,25 @@ defmodule Gatekeep.ResourceTest do
       assert json_body(conn)["error"] == "unauthorized_client"
     end
 
+    test "a resource whose allowed_clients leave the client out refuses it" do
+      config = TestAuth.base_config()
+      [mcp | rest] = config[:resources]
+
+      TestAuth.put_config(
+        clients: Application.get_env(:gatekeep, TestAuth)[:clients],
+        resources: [Keyword.put(mcp, :allowed_clients, ["someone-else"]) | rest]
+      )
+
+      conn =
+        post_form(
+          "/oauth/token",
+          %{"grant_type" => "client_credentials", "resource" => TestAuth.mcp()},
+          basic("worker", @secret)
+        )
+
+      assert json_body(conn)["error"] == "unauthorized_client"
+    end
+
     test "the metadata lists the grant" do
       assert "client_credentials" in json_body(get_path("/.well-known/oauth-authorization-server"))[
                "grant_types_supported"

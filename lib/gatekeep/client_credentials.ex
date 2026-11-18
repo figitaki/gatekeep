@@ -29,7 +29,7 @@ defmodule Gatekeep.ClientCredentials do
          :ok <- Util.expect(method != "none", :unauthorized_client),
          {:ok, resource} <-
            TokenEndpoint.grant_resource(config, params["resource"], params["scope"]),
-         :ok <- Util.expect(method in resource.client_auth_methods, :unauthorized_client),
+         :ok <- check_usable(resource, client, method),
          :ok <- TokenEndpoint.check_dpop_required(resource, jkt),
          {:ok, scopes} <- TokenEndpoint.client_scopes(resource, client, params["scope"]) do
       {:ok, grant} =
@@ -48,6 +48,15 @@ defmodule Gatekeep.ClientCredentials do
         ])
 
       {:ok, TokenEndpoint.issue_access_token(config, grant, scopes, jkt)}
+    end
+  end
+
+  # The resource must take this client and method, including its
+  # allowed_clients.
+  defp check_usable(resource, client, method) do
+    case TokenEndpoint.check_resource_usable(resource, client, method) do
+      :ok -> :ok
+      :error -> {:error, :unauthorized_client}
     end
   end
 end
