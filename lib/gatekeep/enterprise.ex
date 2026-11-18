@@ -118,7 +118,11 @@ defmodule Gatekeep.Enterprise do
   def token(%Config{} = config, client, method, params, jkt) do
     with {:ok, claims, trust} <- verify(config, params["assertion"], client, jkt),
          {:ok, resource} <- resource(config, claims, params["resource"]),
-         :ok <- Util.expect(method in resource.client_auth_methods, :unauthorized_client),
+         :ok <-
+           Util.expect(
+             TokenEndpoint.check_resource_usable(resource, client, method) == :ok,
+             :unauthorized_client
+           ),
          :ok <- TokenEndpoint.check_dpop_required(resource, jkt),
          {:ok, scopes} <- scopes(resource, client, claims["scope"], params["scope"]),
          {:ok, local} <- resolve(config, claims, trust),

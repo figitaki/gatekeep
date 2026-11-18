@@ -271,6 +271,18 @@ defmodule Gatekeep.EnterpriseTest do
              {400, "unsupported_grant_type"}
   end
 
+  test "a resource whose allowed_clients leave the client out refuses the grant", ctx do
+    [mcp | rest] = TestAuth.base_config()[:resources]
+
+    TestAuth.put_config(
+      enterprise: [module: Trust],
+      resources: [Keyword.put(mcp, :allowed_clients, ["someone-else"]) | rest]
+    )
+
+    assert error(exchange_jag(ctx.client, id_jag(ctx.client, ctx.idp_key))) ==
+             {400, "unauthorized_client"}
+  end
+
   test "a public client presenting someone else's assertion is caught by client_id", ctx do
     public = TestClient.new(public: true)
     jag = id_jag(ctx.client, ctx.idp_key)
