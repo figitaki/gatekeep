@@ -52,14 +52,23 @@ defmodule Gatekeep.DeviceAuthorization do
     * `resource` - the `Gatekeep.Resource` the tokens will be for.
     * `scopes` - the requested scopes, which the user may narrow.
     * `scope_descriptions` - descriptions of those scopes for the page.
+    * `expires_at` - when the code expires, so the page can count down.
   """
   @type request :: %{
           user_code: String.t(),
           client: Client.t(),
           resource: Resource.t(),
           scopes: [String.t()],
-          scope_descriptions: %{String.t() => String.t()}
+          scope_descriptions: %{String.t() => String.t()},
+          expires_at: DateTime.t()
         }
+
+  @doc """
+  The letters user codes are made of, for a verification page that accepts
+  only those. A code is 8 of them, shown as `XXXX-XXXX`.
+  """
+  @spec user_code_alphabet() :: String.t()
+  def user_code_alphabet, do: List.to_string(@alphabet)
 
   @impl true
   def grant_type, do: @grant_type
@@ -189,7 +198,8 @@ defmodule Gatekeep.DeviceAuthorization do
            client: client,
            resource: resource,
            scopes: row.scopes,
-           scope_descriptions: Map.take(resource.scope_descriptions, row.scopes)
+           scope_descriptions: Map.take(resource.scope_descriptions, row.scopes),
+           expires_at: row.expires_at
          }}
       else
         {:error, :expired_user_code}

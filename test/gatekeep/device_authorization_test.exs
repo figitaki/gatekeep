@@ -68,6 +68,7 @@ defmodule Gatekeep.DeviceAuthorizationTest do
 
     %{"device_code" => device_code, "user_code" => user_code} = body = json_body(conn)
     assert user_code =~ ~r/\A[BCDFGHJKLMNPQRSTVWXZ]{4}-[BCDFGHJKLMNPQRSTVWXZ]{4}\z/
+    assert DeviceAuthorization.user_code_alphabet() == "BCDFGHJKLMNPQRSTVWXZ"
     assert body["verification_uri"] == "https://auth.test/device"
     assert body["verification_uri_complete"] == "https://auth.test/device?user_code=#{user_code}"
     assert body["expires_in"] == 600
@@ -82,6 +83,9 @@ defmodule Gatekeep.DeviceAuthorizationTest do
     assert request.client.client_id == "cli"
     assert request.resource.id == TestAuth.mcp()
     assert request.scope_descriptions == %{"notes:read" => "Read notes"}
+    # About expires_in from now, so the page can count down.
+    left = DateTime.diff(request.expires_at, DateTime.utc_now())
+    assert left in 590..600
 
     assert :ok =
              DeviceAuthorization.approve(TestAuth.config(), typed,
