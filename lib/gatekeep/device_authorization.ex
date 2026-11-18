@@ -63,6 +63,13 @@ defmodule Gatekeep.DeviceAuthorization do
           expires_at: DateTime.t()
         }
 
+  @doc """
+  The letters user codes are made of, for a verification page that accepts
+  only those. A code is 8 of them, shown as `XXXX-XXXX`.
+  """
+  @spec user_code_alphabet() :: String.t()
+  def user_code_alphabet, do: List.to_string(@alphabet)
+
   @impl true
   def grant_type, do: @grant_type
 

@@ -68,6 +68,7 @@ defmodule Gatekeep.DeviceAuthorizationTest do
 
     %{"device_code" => device_code, "user_code" => user_code} = body = json_body(conn)
     assert user_code =~ ~r/\A[BCDFGHJKLMNPQRSTVWXZ]{4}-[BCDFGHJKLMNPQRSTVWXZ]{4}\z/
+    assert DeviceAuthorization.user_code_alphabet() == "BCDFGHJKLMNPQRSTVWXZ"
     assert body["verification_uri"] == "https://auth.test/device"
     assert body["verification_uri_complete"] == "https://auth.test/device?user_code=#{user_code}"
     assert body["expires_in"] == 600
