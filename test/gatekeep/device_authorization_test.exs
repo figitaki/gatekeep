@@ -82,6 +82,9 @@ defmodule Gatekeep.DeviceAuthorizationTest do
     assert request.client.client_id == "cli"
     assert request.resource.id == TestAuth.mcp()
     assert request.scope_descriptions == %{"notes:read" => "Read notes"}
+    # About expires_in from now, so the page can count down.
+    left = DateTime.diff(request.expires_at, DateTime.utc_now())
+    assert left in 590..600
 
     assert :ok =
              DeviceAuthorization.approve(TestAuth.config(), typed,

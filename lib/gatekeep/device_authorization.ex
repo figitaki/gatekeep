@@ -52,13 +52,15 @@ defmodule Gatekeep.DeviceAuthorization do
     * `resource` - the `Gatekeep.Resource` the tokens will be for.
     * `scopes` - the requested scopes, which the user may narrow.
     * `scope_descriptions` - descriptions of those scopes for the page.
+    * `expires_at` - when the code expires, so the page can count down.
   """
   @type request :: %{
           user_code: String.t(),
           client: Client.t(),
           resource: Resource.t(),
           scopes: [String.t()],
-          scope_descriptions: %{String.t() => String.t()}
+          scope_descriptions: %{String.t() => String.t()},
+          expires_at: DateTime.t()
         }
 
   @impl true
@@ -189,7 +191,8 @@ defmodule Gatekeep.DeviceAuthorization do
            client: client,
            resource: resource,
            scopes: row.scopes,
-           scope_descriptions: Map.take(resource.scope_descriptions, row.scopes)
+           scope_descriptions: Map.take(resource.scope_descriptions, row.scopes),
+           expires_at: row.expires_at
          }}
       else
         {:error, :expired_user_code}
