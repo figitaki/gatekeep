@@ -41,6 +41,12 @@ the specific reason stays internal.
 | Stolen DPoP-bound token | Needs `Authorization: DPoP` and a proof by the bound key over this method, URL, and token (`ath`); bound tokens sent as Bearer are refused | `resource_test.exs` "DPoP" |
 | DPoP proof replay | `jti` accepted once per key across servers; `iat` window 60 s + 30 s skew | `jose_dpop_test.exs` |
 
+## Enterprise-managed authorization
+
+See the [enterprise guide](enterprise_managed_authorization.md);
+`enterprise_test.exs` covers each rule (type, audience, client, issuer,
+signature, header keys, time, replay, resource, scope, and `cnf`).
+
 ## Operational notes
 
 - Never log the bodies of token, revocation, or registration requests.

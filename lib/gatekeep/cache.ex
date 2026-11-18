@@ -1,7 +1,7 @@
 defmodule Gatekeep.Cache do
   @moduledoc false
-  # A per-issuer ETS cache of fetched documents, such as client metadata with
-  # its key set. Entries are
+  # A per-issuer ETS cache of fetched documents: client metadata with its key
+  # set, and enterprise issuers' key sets. Entries are
   # `{key, value, expires_at, fetched_at}`. Expired entries are swept every
   # minute, and the table holds at most `:client_cache_size` entries; past
   # that, results are used but not cached, so unknown IDs can't grow memory
@@ -52,6 +52,10 @@ defmodule Gatekeep.Cache do
   Stores `value` for `ttl` seconds, unless the table is full. Entries are
   written by the cache process, so concurrent stores of different keys can't
   together exceed `max_size`. Stores follow fetches, so they are rare.
+
+  `max_size` is a total, or `{pattern, max}` to count only the keys matching
+  the ETS match `pattern`, giving that kind of entry its own budget. Returns
+  `:full` when the entry was not stored.
   """
   def put(name, key, value, ttl, max_size, fetched_at \\ Gatekeep.Util.now()) do
     GenServer.call(
@@ -64,12 +68,21 @@ defmodule Gatekeep.Cache do
   def handle_call({:admit, {key, _, _, _} = entry, max_size}, _from, name) do
     table = table(name)
 
-    if :ets.member(table, key) or :ets.info(table, :size) < max_size do
+    if :ets.member(table, key) or size(table, max_size) < limit(max_size) do
       :ets.insert(table, entry)
+      {:reply, :ok, name}
+    else
+      {:reply, :full, name}
     end
-
-    {:reply, :ok, name}
   end
+
+  defp size(table, {pattern, _max}),
+    do: :ets.select_count(table, [{{pattern, :_, :_, :_}, [], [true]}])
+
+  defp size(table, _max), do: :ets.info(table, :size)
+
+  defp limit({_pattern, max}), do: max
+  defp limit(max), do: max
 
   @doc "Replaces the value of an existing entry, keeping its expiry."
   def update(name, key, value, fetched_at) do
