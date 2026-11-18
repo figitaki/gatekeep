@@ -77,3 +77,28 @@ defmodule Gatekeep.Storage.Ecto.RegisteredClient do
     timestamps(type: :utc_datetime, updated_at: false)
   end
 end
+
+defmodule Gatekeep.Storage.Ecto.DeviceCode do
+  @moduledoc false
+  use Ecto.Schema
+
+  schema "gatekeep_device_codes" do
+    field :device_code_hash, :binary, redact: true
+    field :user_code_hash, :binary, redact: true
+    field :client_id, :string
+    field :client_name, :string
+    field :resource, :string
+    field :scopes, {:array, :string}
+    field :status, :string, default: "pending"
+    field :subject, :string
+    field :owner, :string
+    field :claims, :map, default: %{}
+    field :interval, :integer
+    field :last_polled_at, :utc_datetime
+    field :expires_at, :utc_datetime
+    field :consumed_at, :utc_datetime
+    field :grant_id, :id
+
+    timestamps(type: :utc_datetime, updated_at: false)
+  end
+end

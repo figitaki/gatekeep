@@ -98,7 +98,8 @@ defmodule Gatekeep.ResourceTest do
       assert conn.status == 401
       assert challenge(conn) =~ ~s(error="invalid_token")
 
-      # Another key's proof.
+      # Another key's valid proof: the key binding is wrong, so the token
+      # is (RFC 9449 §7.1, Figure 16).
       thief = TestClient.ec_key(nil)
 
       conn =
@@ -110,7 +111,7 @@ defmodule Gatekeep.ResourceTest do
       assert conn.status == 401
 
       assert challenge(conn) =~
-               ~s(DPoP resource_metadata="https://mcp.test/.well-known/oauth-protected-resource/mcp", error="invalid_dpop_proof")
+               ~s(DPoP resource_metadata="https://mcp.test/.well-known/oauth-protected-resource/mcp", error="invalid_token")
 
       # A proof for another request, one without ath, and a replay.
       for proof <- [
@@ -298,6 +299,25 @@ defmodule Gatekeep.ResourceTest do
         post_form(
           "/oauth/token",
           Map.put(TestClient.client_auth(client), "grant_type", "client_credentials")
+        )
+
+      assert json_body(conn)["error"] == "unauthorized_client"
+    end
+
+    test "a resource whose allowed_clients leave the client out refuses it" do
+      config = TestAuth.base_config()
+      [mcp | rest] = config[:resources]
+
+      TestAuth.put_config(
+        clients: Application.get_env(:gatekeep, TestAuth)[:clients],
+        resources: [Keyword.put(mcp, :allowed_clients, ["someone-else"]) | rest]
+      )
+
+      conn =
+        post_form(
+          "/oauth/token",
+          %{"grant_type" => "client_credentials", "resource" => TestAuth.mcp()},
+          basic("worker", @secret)
         )
 
       assert json_body(conn)["error"] == "unauthorized_client"

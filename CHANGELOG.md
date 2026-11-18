@@ -28,7 +28,21 @@ The first pre-release. APIs may change before 0.1.0.
   `Gatekeep.Signer` with `Gatekeep.Signer.Local` for JWT access tokens, and the
   `Gatekeep.FastestMCP` authenticator.
 - `Gatekeep.Grant`, the behaviour of extension grants.
+- The device authorization grant (RFC 8628), `Gatekeep.DeviceAuthorization`,
+  turned on by `:device_verification_uri`, with `slow_down` and
+  `expired_token`. `lookup/2` returns the code's `expires_at`, so a
+  verification page can count down, and `user_code_alphabet/0` lists the
+  letters codes use. Storage migration version 2 adds its table; `up/1` and
+  `down/1` now run only the versions a database is missing.
+- The resource option `:allowed_clients`, which limits a resource's tokens to
+  listed clients, such as an app's own command-line tool.
 - `:registered_client_prefix`, so registered client IDs from an earlier
   issuer keep working.
+
+### Fixed
+
+- A resource answers a valid DPoP proof from a key the token isn't bound to
+  with `invalid_token`, as RFC 9449 §7.1 (Figure 16) shows, and keeps
+  `invalid_dpop_proof` for proofs that fail their checks.
 
 [0.1.0-alpha.1]: https://github.com/figitaki/gatekeep/commits/main

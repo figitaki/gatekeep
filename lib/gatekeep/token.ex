@@ -9,10 +9,13 @@ defmodule Gatekeep.Token do
       grant takes effect on the next request;
     * its audience is the resource checking it (RFC 8707): a token issued for
       one resource is refused by every other;
-    * its client is not blocked;
+    * its client is not blocked, and is one of the resource's
+      `allowed_clients` if it lists any;
     * a DPoP-bound token comes with `Authorization: DPoP` and a valid proof
       from the bound key, covering the token with `ath`; a bound token sent
-      as Bearer is refused, so a stolen token is useless without the key;
+      as Bearer is refused, so a stolen token is useless without the key.
+      A proof that fails its checks is `:invalid_dpop_proof`; a valid proof
+      from another key is `:invalid_token` (RFC 9449 §7.1);
     * a resource with `dpop: :required` gets a DPoP-bound token.
 
   `Gatekeep.Plug.Resource` wraps it with the HTTP challenges.
@@ -123,6 +126,7 @@ defmodule Gatekeep.Token do
          :gt <- DateTime.compare(record.expires_at, now),
          true <- Util.same_url?(record.resource, resource.id),
          true <- resource.enabled,
+         true <- is_nil(resource.allowed_clients) or record.client_id in resource.allowed_clients,
          true <- grant_active?(record.grant),
          false <- record.client_id in config.blocked_clients do
       {:ok, record}
@@ -152,9 +156,13 @@ defmodule Gatekeep.Token do
           access_token: token
         }
 
+        # A valid proof from another key is a bad key binding, so the token
+        # is what's wrong (RFC 9449 §7.1, Figure 16); invalid_dpop_proof is
+        # for proofs that fail the checks of §4.3.
         case DPoP.verify(Map.get(request, :dpop, []), proof_request, config) do
           {:ok, ^jkt} -> :ok
-          _ -> {:error, :invalid_dpop_proof}
+          {:ok, _other_key} -> {:error, :invalid_token}
+          {:error, _reason} -> {:error, :invalid_dpop_proof}
         end
     end
   end
