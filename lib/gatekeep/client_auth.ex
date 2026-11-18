@@ -117,7 +117,7 @@ defmodule Gatekeep.ClientAuth do
          :ok <- Util.expect(iat <= now + skew, :issued_in_future),
          :ok <- check_nbf(jws.claims["nbf"], now, skew),
          :ok <- Util.expect(exp - iat <= @max_assertion_lifetime, :assertion_too_long),
-         :ok <- Util.expect(jti != "" and byte_size(jti) <= 255, :bad_jti),
+         :ok <- Util.expect(jti != "" and byte_size(jti) <= 256, :bad_jti),
          :ok <-
            Storage.call(config, :remember_jti, [
              "client_assertion",

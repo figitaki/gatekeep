@@ -249,6 +249,9 @@ defmodule Gatekeep.TokenEndpointTest do
       assert check.(iat: now + 60, exp: now + 120) == {:error, :issued_in_future}
       assert check.(nbf: now + 60) == {:error, :not_yet_valid}
       assert {:ok, _} = check.(nbf: now + 30)
+      assert {:ok, _} = check.(jti: String.duplicate("a", 256))
+      assert check.(jti: String.duplicate("b", 257)) == {:error, :bad_jti}
+      assert check.(jti: "") == {:error, :bad_jti}
 
       params = TestClient.client_auth(client)
       assert {:ok, _} = Gatekeep.ClientAuth.verify_client_assertion(config, params)

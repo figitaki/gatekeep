@@ -41,5 +41,7 @@ The first pre-release. APIs may change before 0.1.0.
 - A resource answers a valid DPoP proof from a key the token isn't bound to
   with `invalid_token`, as RFC 9449 §7.1 (Figure 16) shows, and keeps
   `invalid_dpop_proof` for proofs that fail their checks.
+- Client assertions may carry a `jti` of up to 256 bytes. The limit was 255,
+  which refused assertions from signers that allow 256 characters.
 
 [0.1.0-alpha.1]: https://github.com/figitaki/gatekeep/commits/main
