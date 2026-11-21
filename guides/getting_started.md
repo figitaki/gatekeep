@@ -217,3 +217,21 @@ wrong-code attempts per person on that page.
 
 To keep a resource for your own tool only, list it in the resource's
 `allowed_clients`.
+
+## Machine clients
+
+Pre-register clients for the client credentials grant:
+
+```elixir
+clients: [
+  [
+    client_id: "nightly-report",
+    client_secret_sha256: "…", # Gatekeep.hash_client_secret(secret)
+    grant_types: ["client_credentials"],
+    scopes: ["notes:read"]
+  ]
+]
+```
+
+or give them `jwks:` for `private_key_jwt`, which the MCP client credentials
+extension recommends.

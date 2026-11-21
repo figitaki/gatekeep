@@ -13,7 +13,8 @@ defmodule Gatekeep.TokenEndpoint do
       time; presenting any replaced one revokes the grant and every token
       issued under it.
     * Extension grants, each a `Gatekeep.Grant` module: the device
-      authorization grant (`Gatekeep.DeviceAuthorization`).
+      authorization grant (`Gatekeep.DeviceAuthorization`) and
+      `client_credentials` (`Gatekeep.ClientCredentials`).
 
   ## DPoP
 
@@ -30,7 +31,7 @@ defmodule Gatekeep.TokenEndpoint do
   alias Gatekeep.{Client, ClientAuth, Config, DPoP, Resource, Storage, Util}
 
   # Grants beyond authorization_code and refresh_token, each a Gatekeep.Grant.
-  @extension_grants [Gatekeep.DeviceAuthorization]
+  @extension_grants [Gatekeep.DeviceAuthorization, Gatekeep.ClientCredentials]
 
   @typedoc """
   The HTTP request around the form parameters: its `Authorization` header and

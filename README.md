@@ -11,7 +11,7 @@
 the authorization server to you; Gatekeep is that server. It covers what MCP
 clients such as Claude, ChatGPT, Claude Code, and the MCP Inspector use:
 PKCE, client ID metadata documents, dynamic client registration, resource
-indicators, and DPoP.
+indicators, DPoP, and client credentials.
 
 [Getting started](https://hexdocs.pm/gatekeep/getting_started.html) ·
 [FastestMCP](https://hexdocs.pm/gatekeep/fastest_mcp.html) ·
@@ -111,6 +111,7 @@ walks through each step, including the consent controller.
   `scope` and `insufficient_scope`.
 - DPoP (RFC 9449): proof checks, bound access and refresh tokens, `dpop_jkt`,
   and enforcement for clients that declare `dpop_bound_access_tokens`.
+- The client credentials grant for machine clients.
 - The device authorization grant (RFC 8628) for command-line tools and
   other clients that can't take a redirect.
 - Behaviours for storage (Ecto adapter included), consent, signing, and

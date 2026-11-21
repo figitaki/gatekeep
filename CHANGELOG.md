@@ -21,6 +21,7 @@ The first pre-release. APIs may change before 0.1.0.
   per-resource audiences (RFC 8707), and `Gatekeep.Plug.Resource`.
 - DPoP (RFC 9449): proof verification, bound access and refresh tokens,
   `dpop_jkt` code binding, and `dpop_bound_access_tokens` enforcement.
+- The client credentials grant.
 - `Gatekeep.Storage` with an Ecto/PostgreSQL adapter and migrations,
   `Gatekeep.Signer` with `Gatekeep.Signer.Local` for JWT access tokens, and the
   `Gatekeep.FastestMCP` authenticator.

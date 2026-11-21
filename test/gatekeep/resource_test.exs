@@ -214,4 +214,119 @@ defmodule Gatekeep.ResourceTest do
              ]
     end
   end
+
+  describe "client credentials" do
+    @secret "s3cret-machine"
+
+    setup do
+      TestAuth.put_config(
+        clients: [
+          [
+            client_id: "worker",
+            client_secret_sha256: Gatekeep.hash_client_secret(@secret),
+            grant_types: ["client_credentials"],
+            scopes: ["notes:read"]
+          ],
+          [client_id: "browser-app", public: true, redirect_uris: ["https://app.example/cb"]]
+        ]
+      )
+
+      :ok
+    end
+
+    defp basic(id, secret), do: [{"authorization", "Basic " <> Base.encode64("#{id}:#{secret}")}]
+
+    test "a machine client gets a token as itself, limited to its scopes" do
+      conn =
+        post_form(
+          "/oauth/token",
+          %{"grant_type" => "client_credentials", "resource" => TestAuth.mcp()},
+          basic("worker", @secret)
+        )
+
+      assert %{"access_token" => access, "scope" => "notes:read"} = body = json_body(conn)
+      refute Map.has_key?(body, "refresh_token")
+      assert get_path("/mcp", bearer(access)).resp_body == "hello worker"
+
+      conn =
+        post_form(
+          "/oauth/token",
+          %{"grant_type" => "client_credentials", "scope" => "notes:write"},
+          basic("worker", @secret)
+        )
+
+      assert json_body(conn)["error"] == "invalid_scope"
+    end
+
+    test "client_secret_post works too, and a wrong secret is invalid_client" do
+      conn =
+        post_form("/oauth/token", %{
+          "grant_type" => "client_credentials",
+          "client_id" => "worker",
+          "client_secret" => @secret
+        })
+
+      assert conn.status == 200
+
+      conn =
+        post_form("/oauth/token", %{"grant_type" => "client_credentials"}, basic("worker", "nope"))
+
+      assert {conn.status, json_body(conn)["error"]} == {401, "invalid_client"}
+    end
+
+    test "a client without the grant, or a public client, can't use it", %{client: client} do
+      conn =
+        post_form(
+          "/oauth/token",
+          Map.put(TestClient.client_auth(client), "grant_type", "client_credentials")
+        )
+
+      assert json_body(conn)["error"] == "unauthorized_client"
+
+      conn =
+        post_form("/oauth/token", %{
+          "grant_type" => "client_credentials",
+          "client_id" => "browser-app"
+        })
+
+      assert json_body(conn)["error"] == "unauthorized_client"
+    end
+
+    test "a metadata document client declaring the grant can't use it" do
+      client = TestClient.new(metadata: %{"grant_types" => ["client_credentials"]})
+
+      conn =
+        post_form(
+          "/oauth/token",
+          Map.put(TestClient.client_auth(client), "grant_type", "client_credentials")
+        )
+
+      assert json_body(conn)["error"] == "unauthorized_client"
+    end
+
+    test "a resource whose allowed_clients leave the client out refuses it" do
+      config = TestAuth.base_config()
+      [mcp | rest] = config[:resources]
+
+      TestAuth.put_config(
+        clients: Application.get_env(:gatekeep, TestAuth)[:clients],
+        resources: [Keyword.put(mcp, :allowed_clients, ["someone-else"]) | rest]
+      )
+
+      conn =
+        post_form(
+          "/oauth/token",
+          %{"grant_type" => "client_credentials", "resource" => TestAuth.mcp()},
+          basic("worker", @secret)
+        )
+
+      assert json_body(conn)["error"] == "unauthorized_client"
+    end
+
+    test "the metadata lists the grant" do
+      assert "client_credentials" in json_body(get_path("/.well-known/oauth-authorization-server"))[
+               "grant_types_supported"
+             ]
+    end
+  end
 end

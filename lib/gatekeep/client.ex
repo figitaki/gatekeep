@@ -7,8 +7,8 @@ defmodule Gatekeep.Client do
       metadata document (CIMD), as Claude and ChatGPT publish.
     * `:registered` - registered through dynamic client registration
       (RFC 7591). Always public, and its name is not verified.
-    * `:static` - pre-registered in config under `:clients`, such as a
-      confidential server-side client.
+    * `:static` - pre-registered in config under `:clients`, such as a machine
+      client for the client credentials grant.
 
   `auth_methods` lists the token endpoint authentication methods the client
   may use. `dpop_bound` is true when its metadata declares
@@ -22,6 +22,7 @@ defmodule Gatekeep.Client do
     :kind,
     :jwks_uri,
     :secret_hash,
+    :subject,
     :scopes,
     redirect_uris: [],
     auth_methods: [],
@@ -36,6 +37,7 @@ defmodule Gatekeep.Client do
           kind: :metadata_document | :registered | :static,
           jwks_uri: String.t() | nil,
           secret_hash: String.t() | nil,
+          subject: String.t() | nil,
           scopes: [String.t()] | nil,
           redirect_uris: [String.t()],
           auth_methods: [String.t()],
@@ -75,6 +77,7 @@ defmodule Gatekeep.Client do
       auth_methods: methods,
       grant_types: opts[:grant_types],
       scopes: opts[:scopes],
+      subject: opts[:subject],
       dpop_bound: opts[:dpop_bound_access_tokens]
     }
   end
